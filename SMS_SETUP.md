@@ -96,9 +96,9 @@ https://facebook.com/marketplace
 2. Create Basic Task
 3. **Trigger:** Daily at 8:00 AM
 4. **Action:** Start a program
-   - Program: `C:\Users\Mike\Documents\Code\JeepFinder\.venv\Scripts\python.exe`
+   - Program: `C:\Users\Mike\Documents\Code\OverlandFinder\.venv\Scripts\python.exe`
    - Arguments: `daily_monitor.py`
-   - Start in: `C:\Users\Mike\Documents\Code\JeepFinder`
+   - Start in: `C:\Users\Mike\Documents\Code\OverlandFinder`
 
 ### Or use Python scheduler (runs continuously):
 
