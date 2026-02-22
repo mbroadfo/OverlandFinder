@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 from typing import Optional, List, Dict, Tuple
 from dotenv import load_dotenv
 
-from value_evaluator import ValueEvaluator, VehicleListing
-from sms_notifier import SMSNotifier
+from src.evaluator.value_evaluator import ValueEvaluator, VehicleListing
+from src.jobs.sms_notifier import SMSNotifier
 
 load_dotenv(override=True)
 

@@ -22,8 +22,8 @@ from agent_framework import (
 )
 from azure.ai.agentserver.agentframework import from_agent_framework
 
-from value_evaluator import ValueEvaluator
-from deal_finder_agent import DealFinderTools
+from src.evaluator.value_evaluator import ValueEvaluator
+from src.evaluator.deal_finder_agent import DealFinderTools
 
 # Load environment variables
 load_dotenv(override=True)

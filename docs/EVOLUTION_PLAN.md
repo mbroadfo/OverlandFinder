@@ -105,49 +105,65 @@
 
 ## 📅 Implementation Phases
 
-### **Phase 0: Foundation & CI/CD** ⏱️ Week 1
-**Goal:** Establish Azure infrastructure and automated deployment pipeline
+### **Phase 0: Foundation & Infrastructure** ⏱️ Week 1
+**Goal:** Establish Azure infrastructure with Terraform and automated deployment pipeline
+
+**Status:** 🔄 **IN PROGRESS**
 
 **Tasks:**
-1. ✅ **Azure Resource Setup**
-   ```bash
-   # Resource group
-   az group create --name rg-overland-finder --location eastus
-   
-   # Container Registry (for Docker images)
-   az acr create --name acrOverlandFinder --resource-group rg-overland-finder --sku Basic
-   
-   # Container Apps environment
-   az containerapp env create --name overland-env --resource-group rg-overland-finder
-   
-   # Key Vault (FREE - no per-secret cost like AWS)
-   az keyvault create --name kv-overland-finder --resource-group rg-overland-finder
-   
-   # Blob Storage (images, logs, backups)
-   az storage account create --name stoverlandfinder --sku Standard_LRS
-   
-   # Application Insights (monitoring)
-   az monitor app-insights component create --app overland-insights --resource-group rg-overland-finder
-   
-   # Managed Identity (for passwordless auth)
-   az identity create --name id-overland-finder --resource-group rg-overland-finder
-   ```
+1. ✅ **Project Structure Reorganization**
+   - Created `src/` package structure (scrapers, evaluator, data, utils, jobs, api)
+   - Created `infrastructure/terraform/` for IaC
+   - Created `docs/`, `functions/`, `tests/`, `scripts/` folders
+   - Moved files preserving git history (git mv)
+   - Updated import paths for new structure
 
-2. ✅ **MongoDB Atlas Setup**
+2. ✅ **Terraform Infrastructure as Code**
+   - `infrastructure/terraform/providers.tf` - Azure/AzureAD providers config
+   - `infrastructure/terraform/variables.tf` - Input variables with sensitive flags
+   - `infrastructure/terraform/main.tf` - All Azure resources:
+     - Resource Group (`rg-overland-finder-dev`)
+     - Storage Account with containers (vehicle-images, logs)
+     - Log Analytics Workspace + Application Insights
+     - Azure Key Vault with secrets (MongoDB URI, SMTP, Foundry)
+     - Azure Container Registry (Basic SKU)
+     - 2x Managed Identities (Container Apps, Functions)
+     - Key Vault access policies (3x for terraform/apps/functions)
+     - RBAC assignments (Storage Blob Contributor, AcrPull)
+     - Container Apps Environment + Job (cron schedule)
+     - App Service Plan + Function App (Y1 consumption)
+   - `infrastructure/terraform/outputs.tf` - Export RG, Key Vault, ACR, App Insights
+   - `infrastructure/terraform/terraform.tfvars.example` - Template for user values
+   - `infrastructure/terraform/README.md` - Deployment guide, cost estimates, troubleshooting
+   - Cost: ~$7-8/month MVP
+
+3. ⏳ **MongoDB Atlas Setup** (Next)
    - Create free M0 cluster at mongodb.com/cloud/atlas
    - Database: `overland_finder`
    - Collections: `deals`, `scrape_history`, `user_favorites`
    - Indexes: `value_score`, `timestamp`, `make`, `model`, `vin`
    - IP allowlist: `0.0.0.0/0` (for Azure Container Apps)
-   - Save connection string to Key Vault
+   - Add connection string to `terraform.tfvars`
 
-3. ✅ **GitHub Actions CI/CD Pipeline**
+4. ⏳ **Initial Terraform Deployment**
+   ```bash
+   cd infrastructure/terraform
+   cp terraform.tfvars.example terraform.tfvars
+   # Edit terraform.tfvars with MongoDB URI, SMTP creds, Foundry endpoint
+   
+   terraform init
+   terraform plan
+   terraform apply
+   ```
+
+5. ⏳ **GitHub Actions CI/CD Pipeline**
    - Create service principal for GitHub
-   - Configure GitHub Secrets (Azure credentials, ACR, MongoDB URI)
+   - Configure GitHub Secrets (Azure credentials, ACR login)
    - Create `.github/workflows/deploy.yml`
-   - Auto-deploy on push to `main` branch
+   - Auto-build Docker images on push to `main`
+   - Auto-deploy to Container Apps + Functions
 
-4. ✅ **Initial Dockerfile**
+6. ⏳ **Initial Dockerfile**
    ```dockerfile
    FROM python:3.13-slim
    WORKDIR /app

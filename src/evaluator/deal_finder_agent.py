@@ -13,9 +13,9 @@ from azure.identity.aio import DefaultAzureCredential
 from agent_framework.azure import AzureAIClient
 from agent_framework import WorkflowBuilder
 
-from value_evaluator import ValueEvaluator, VehicleListing, DealEvaluation
-from vehicle_database import VEHICLE_PROFILES, is_good_overlanding_platform
-from vin_decoder import decode_vin, get_vehicle_info_from_vin, get_vin_validation_error
+from src.evaluator.value_evaluator import ValueEvaluator, VehicleListing, DealEvaluation
+from src.data.vehicle_database import VEHICLE_PROFILES, is_good_overlanding_platform
+from src.utils.vin_decoder import decode_vin, get_vehicle_info_from_vin, get_vin_validation_error
 
 # Load environment variables
 load_dotenv(override=True)

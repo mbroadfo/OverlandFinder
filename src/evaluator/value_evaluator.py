@@ -5,7 +5,7 @@ Scores vehicles based on price, condition, capability, and market value.
 
 from dataclasses import dataclass
 from typing import Optional, List, Dict, Tuple
-from vehicle_database import get_vehicle_profile, calculate_platform_score
+from src.data.vehicle_database import get_vehicle_profile, calculate_platform_score
 
 
 @dataclass
