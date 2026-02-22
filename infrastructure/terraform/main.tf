@@ -189,7 +189,9 @@ resource "azurerm_container_app_job" "scraper" {
   replica_retry_limit        = 1
   
   schedule_trigger_config {
-    cron_expression = var.scraper_schedule
+    cron_expression          = var.scraper_schedule
+    parallelism              = 1
+    replica_completion_count = 1
   }
   
   identity {
@@ -234,6 +236,25 @@ resource "azurerm_container_app_job" "scraper" {
   tags = var.tags
 }
 
+# Managed Identity for Functions
+resource "azurerm_user_assigned_identity" "functions" {
+  name                = "id-${var.project_name}-func-${var.environment}"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  tags                = var.tags
+}
+
+# Grant Functions Identity access to Key Vault
+resource "azurerm_key_vault_access_policy" "functions" {
+  key_vault_id = azurerm_key_vault.main.id
+  tenant_id    = azurerm_user_assigned_identity.functions.tenant_id
+  object_id    = azurerm_user_assigned_identity.functions.principal_id
+  
+  secret_permissions = [
+    "Get", "List"
+  ]
+}
+
 # Azure Function App (for daily SMS notifications)
 resource "azurerm_service_plan" "functions" {
   name                = "plan-${var.project_name}-func-${var.environment}"
@@ -275,23 +296,4 @@ resource "azurerm_linux_function_app" "sms" {
   }
   
   tags = var.tags
-}
-
-# Managed Identity for Functions
-resource "azurerm_user_assigned_identity" "functions" {
-  name                = "id-${var.project_name}-func-${var.environment}"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  tags                = var.tags
-}
-
-# Grant Functions Identity access to Key Vault
-resource "azurerm_key_vault_access_policy" "functions" {
-  key_vault_id = azurerm_key_vault.main.id
-  tenant_id    = azurerm_user_assigned_identity.functions.tenant_id
-  object_id    = azurerm_user_assigned_identity.functions.principal_id
-  
-  secret_permissions = [
-    "Get", "List"
-  ]
 }
