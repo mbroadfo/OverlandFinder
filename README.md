@@ -1,142 +1,268 @@
-# 🚙 Overland Finder
+# OverlandFinder 🏔️🚙
 
-AI-powered agent platform that finds and evaluates incredible VALUE on overlanding-capable vehicles. Built with Microsoft Agent Framework.
+**Autonomous background agent for discovering undervalued overland vehicles**
 
-## 🎯 Mission
+Automatically scrapes marketplaces (Facebook Marketplace, eBay Motors, Craigslist, etc.) and identifies high-value deals on 4x4 trucks and SUVs using AI-powered evaluation with VIN decoding for accurate pricing analysis. Maintains a curated database of deals and sends daily SMS summaries of the hottest opportunities.
 
-Find you a goldilocks deal on a sweet overlanding rig for Colorado, Utah, Wyoming, Montana, and Idaho adventures - with maximum bang for your buck!
+**Architecture**: Production-grade Azure deployment with Container Apps Jobs for batch processing, Azure Functions for notifications, MongoDB Atlas for data persistence, and Application Insights for observability. All managed via Terraform - Infrastructure as Code for UHC-style enterprise deployments.
 
-### Your Criteria:
+**Current Status**: Phase 0 (Infrastructure Setup) - Project restructured with Terraform IaC, ready for MongoDB integration and scraper development.
+
+## 🎯 Project Mission
+
+Build an intelligent agent that monitors online vehicle marketplaces 24/7, evaluates deals using AI and market data, and surfaces only the best opportunities. No more manual searching - just daily text alerts when genuine values appear.
+
+### Target Criteria
 - **Budget:** ~$10k purchase + $5k upgrades = $15k total
 - **Priority:** Best value ratio (price vs condition/capability)
-- **Vehicles:** Open to ALL capable platforms (Wrangler, 4Runner, Tacoma, Land Cruiser, GX, Xterra, Frontier, Bronco, Colorado)
+- **Vehicles:** ALL capable platforms (Wrangler, 4Runner, Tacoma, Land Cruiser, GX, Xterra, Frontier, Bronco, Colorado)
 - **Deal Types:** Higher mileage if maintained, older but reliable, cosmetic damage OK, salvage if registerable
 - **Location:** Colorado (must be registerable!)
 
+### Key Capabilities
+- **VIN Decoding**: Accurate year/make/model/trim/engine identification from listings
+- **AI Evaluation**: GPT-4 analyzes condition, pricing, modifications, maintenance history
+- **Market Intelligence**: Compares against Kelly Blue Book, NADA, and historical sales
+- **Smart Filtering**: Focuses on overland-ready platforms (4Runner, Tacoma, Land Cruiser, 4x4 Silverado/F-150)
+- **Daily Digest**: SMS summaries with top 5 deals ranked by value score
+
 ## 🏗️ Architecture
 
-This is an intelligent multi-agent system that:
+### Infrastructure (Terraform-managed Azure)
 
-1. **Vehicle Knowledge Base** - Deep knowledge of 12+ overlanding platforms (reliability, capability, upgrade potential, common issues)
-2. **Value Evaluator** - Calculates market value, discount percentages, and value scores
-3. **AI Agent** - Uses GPT-4 to analyze listings like your ChatGPT advisor, but actively hunting deals 24/7
-4. **Tools** - Web scraping, VIN lookup, deal evaluation, data storage
+```
+┌─────────────────────────────────────────────────────────┐
+│                  Azure Subscription                      │
+│                                                          │
+│  ┌────────────────────────────────────────────────┐    │
+│  │  Container Apps Job (Scheduled every 4h)       │    │
+│  │  ┌──────────────┐  ┌──────────────────┐       │    │
+│  │  │   Scrapers   │→ │  AI Evaluator    │       │    │
+│  │  │  (Phase 2-3) │  │  (GPT-4 + VIN)   │       │    │
+│  │  └──────────────┘  └──────────────────┘       │    │
+│  └────────────────────────────────────────────────┘    │
+│                          ↓                              │
+│  ┌────────────────────────────────────────────────┐    │
+│  │  MongoDB Atlas M0 (FREE)                       │    │
+│  │  • deals collection (scored opportunities)     │    │
+│  │  • scrape_history (deduplication)              │    │
+│  │  • favorites (user saves)                      │    │
+│  └────────────────────────────────────────────────┘    │
+│                          ↓                              │
+│  ┌────────────────────────────────────────────────┐    │
+│  │  Azure Function (Timer: Daily 7AM)             │    │
+│  │  ┌──────────────────────────────────┐          │    │
+│  │  │  SMS Notifier (Top 5 Deals)      │          │    │
+│  │  └──────────────────────────────────┘          │    │
+│  └────────────────────────────────────────────────┘    │
+│                                                          │
+│  Supporting Services:                                   │
+│  • Azure Key Vault (secrets management)                 │
+│  • Storage Account (images, logs, backups)              │
+│  • Container Registry (Docker images)                   │
+│  • Application Insights (telemetry)                     │
+│  • Managed Identities (passwordless auth)               │
+└─────────────────────────────────────────────────────────┘
+```
 
-## 📋 Features
-
-### Current (V1):
-- ✅ Comprehensive vehicle knowledge database
-- ✅ Value evaluation engine with scoring
-- ✅ AI agent with natural language interface
-- ✅ Deal evaluation and ranking
-- ✅ Colorado title compliance checking
-- ✅ Upgrade cost estimation
-- ✅ HTTP server mode for production
-- ✅ VS Code debugging integration
-- ✅ **VIN Decoder (NHTSA vPIC API)** - Decode VIN to get vehicle specs
-
-### Planned (V2):
-- 🔄 Automated web scraping (Facebook Marketplace, Craigslist, AutoTrader, auction sites)
-- 🔄 Scheduled monitoring (check every 4 hours)
-- 🔄 Email/SMS notifications for hot deals
-- 🔄 VIN decode integration
-- 🔄 Market price API integration
-- 🔄 Web dashboard for viewing deals
+**Cost Estimate**: ~$7-8/month (Container Apps ~$2-3, ACR ~$5, Storage ~$0.10, rest FREE)
 
 ## 🚀 Quick Start
 
-### 1. Prerequisites
+### Prerequisites
 
-- Python 3.10 or higher
-- Microsoft Foundry project with deployed model
-- VS Code (recommended)
+- Azure subscription ([create free account](https://azure.microsoft.com/free/))
+- [Terraform](https://www.terraform.io/downloads) >= 1.5
+- [Azure CLI](https://docs.microsoft.com/cli/azure/install-azure-cli)
+- [Python](https://www.python.org/downloads/) >= 3.11
+- MongoDB Atlas account ([free tier](https://www.mongodb.com/cloud/atlas/register))
 
-### 2. Install Dependencies
+### 1. Deploy Infrastructure
+
+```bash
+# Clone the repository
+git clone https://github.com/mbroadfo/OverlandFinder.git
+cd OverlandFinder
+
+# Authenticate with Azure
+az login
+
+# Configure Terraform variables
+cd infrastructure/terraform
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your values:
+#   - mongodb_uri (from Atlas connection string)
+#   - smtp_username/password (for email provider)
+#   - foundry_endpoint/model (Azure AI Studio)
+#   - sms_recipient (your phone number)
+
+# Deploy infrastructure
+terraform init
+terraform plan
+terraform apply
+
+# Save outputs for next steps
+terraform output -json > ../../terraform-outputs.json
+```
+
+See [infrastructure/terraform/README.md](infrastructure/terraform/README.md) for detailed deployment guide.
+
+### 2. Install Python Dependencies
 
 ```powershell
-# Activate virtual environment
+# Return to project root
+cd ..\..
+
+# Create virtual environment
+python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-# Install packages
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 3. Configure
+### 3. Test VIN Decoder
 
-Update `.env` file with your Foundry details:
+```python
+from src.utils.vin_decoder import decode_vin
 
-```env
-# Get these from Microsoft Foundry:
-FOUNDRY_PROJECT_ENDPOINT=https://your-project.openai.azure.com/
-FOUNDRY_MODEL_DEPLOYMENT_NAME=gpt-4o
-
-# Adjust search criteria as needed:
-MAX_PURCHASE_PRICE=10000
-TARGET_VEHICLES=Jeep Wrangler,Toyota 4Runner,Toyota Tacoma,...
+result = decode_vin("1FTEW1E50KFA12345")
+print(f"{result['year']} {result['make']} {result['model']}")
+# 2019 Ford F-150
 ```
 
-### 4. Run the Agent
+### 4. Configure MongoDB (Coming in Phase 1)
 
-**Option A: Interactive CLI Mode**
 ```powershell
-python deal_finder_agent.py
+# Will initialize collections and indexes
+python -m src.data.vehicle_database --setup
 ```
 
-**Option B: HTTP Server Mode**
-```powershell
-python deal_finder_server.py --server
-```
-
-**Option C: VS Code Debug Mode (Recommended)**
-1. Press `F5` or click "Run and Debug"
-2. Select "Debug Deal Finder HTTP Server"
-3. AI Toolkit Agent Inspector will open automatically
-
-## 💬 Usage Examples
+## 📁 Project Structure
 
 ```
-You: What vehicles are you looking for?
-Agent: [Lists all target vehicles with search parameters]
-
-You: Decode this VIN: 1C4PJMBS9HW664582
-Agent: [Returns full vehicle specs from NHTSA - 2017 Jeep Cherokee Trailhawk, 3.2L V6, 4WD, etc.]
-
-You: Tell me about the Jeep Wrangler JK platform
-Agent: [Detailed breakdown: reliability 7/10, overlanding 9/10, common issues, red flags, expert notes]
-
-You: Evaluate this deal: 2014 Jeep Wrangler Unlimited, 106k miles, $12,500, hail damage, clean title
-Agent: [Full evaluation with value score, market comparison, pros/cons, recommendation]
-
-You: Show me saved deals
-Agent: [List of top deals sorted by value score]
+OverlandFinder/
+├── src/                          # Main application package
+│   ├── scrapers/                 # Web scrapers (Phase 2-3)
+│   │   ├── facebook_scraper.py   # (TBD)
+│   │   ├── ebay_scraper.py       # (TBD)
+│   │   └── craigslist_scraper.py # (TBD)
+│   ├── evaluator/                # AI deal evaluation (Phase 4)
+│   │   └── deal_finder_agent.py  # Agent orchestration
+│   ├── data/                     # Data layer (Phase 1)
+│   │   └── vehicle_database.py   # MongoDB operations
+│   ├── utils/                    # Utilities
+│   │   └── vin_decoder.py        # ✅ NHTSA vPIC integration
+│   ├── jobs/                     # Background jobs
+│   │   ├── daily_monitor.py      # Scheduled scraping
+│   │   ├── deal_finder_server.py # HTTP server mode
+│   │   └── sms_notifier.py       # SMS notifications
+│   └── api/                      # FastAPI backend (Phase 8)
+│
+├── infrastructure/               # Terraform IaC
+│   └── terraform/
+│       ├── main.tf               # Core Azure resources
+│       ├── variables.tf          # Input variables
+│       ├── outputs.tf            # Export values
+│       ├── providers.tf          # Azure/AzureAD config
+│       ├── terraform.tfvars.example
+│       ├── .gitignore
+│       └── README.md             # Deployment guide
+│
+├── functions/                    # Azure Functions
+│   └── DailySMSDigest/           # Timer-triggered SMS (Phase 5)
+│
+├── tests/                        # Test suite (Phase 6)
+│   ├── test_vin_decoder.py       # (TBD)
+│   ├── test_scrapers.py          # (TBD)
+│   └── test_evaluator.py         # (TBD)
+│
+├── scripts/                      # Utility scripts
+│   ├── backfill_vins.py          # (TBD)
+│   └── export_deals.py           # (TBD)
+│
+├── docs/                         # Documentation
+│   ├── EVOLUTION_PLAN.md         # 9-phase roadmap
+│   └── SMS_SETUP.md              # SMS configuration
+│
+├── pyproject.toml                # Project metadata
+├── requirements.txt              # Python dependencies
+├── Dockerfile                    # Container image (TBD)
+└── README.md                     # This file
 ```
 
-## 🧠 How It Works
+## 🧬 VIN Decoder
 
-### Value Scoring Algorithm
+**Status**: ✅ **Complete and tested** (Phase 0)
 
+The VIN decoder uses the NHTSA API to retrieve accurate vehicle specifications from 17-character VINs found in marketplace listings.
+
+### Features
+
+- ✅ Validates VIN format (17 characters, valid check digit)
+- ✅ Decodes year, make, model, trim, engine, drive type
+- ✅ Extracts GVWR, fuel type, body class
+- ✅ Caches results to minimize API calls
+- ✅ Comprehensive error handling
+
+### Usage
+
+```python
+from src.utils.vin_decoder import decode_vin, batch_decode_vins
+
+# Single VIN
+vehicle_info = decode_vin("1FTEW1E50KFA12345")
+print(vehicle_info)
+{
+    'vin': '1FTEW1E50KFA12345',
+    'year': 2019,
+    'make': 'Ford',
+    'model': 'F-150',
+    'trim': 'XLT SuperCrew 4WD',
+    'engine': '3.5L V6 EcoBoost',
+    'drive_type': '4WD',
+    'fuel_type': 'Gasoline',
+    'gvwr': '7050 lbs',
+    'body_class': 'Pickup',
+    'raw_nhtsa_data': {...}
+}
+
+# Batch processing
+vins = ["1FTEW1E50KFA12345", "JTEBU5JR5K5212345"]
+results = batch_decode_vins(vins)
 ```
-Value Score (0-100) = 
-  Discount % (0-40 points) +
-  Platform Quality (0-30 points) +
-  Price/Budget Ratio (0-20 points) +
-  Mileage Factor (0-10 points) -
-  Red Flag Penalties (30 points each)
-```
 
-### Recommendationss:
-- **80-100:** 🔥 STRONG BUY - ACT FAST
-- **65-79:** ✅ GOOD DEAL - INVESTIGATE
-- **50-64:** ⚖️ FAIR - CONSIDER IF INSPECTED  
-- **0-49:** 👎 PASS - WEAK VALUE
-- **Red Flags:** 🚫 AUTO-REJECT
+**Note**: Migrated from [VehicleWellnessCenter](https://github.com/mbroadfo/VehicleWellnessCenter) project with enhancements for marketplace data parsing.
 
-### Red Flags (Auto-Reject):
-- ⛔ "Export Only" / "Cannot be registered in CO"
-- ⛔ Rollover, undercarriage, flood, or fire damage
-- ⛔ Over budget without exceptional value
+## 🛤️ Development Roadmap
 
-## 📊 Vehicle Database
+See [docs/EVOLUTION_PLAN.md](docs/EVOLUTION_PLAN.md) for the complete 9-phase evolution plan.
+
+### Current Phase: Phase 0 - Infrastructure Setup ✅
+
+- [x] GitHub repository setup
+- [x] VIN decoder implementation
+- [x] Terraform infrastructure as code
+- [x] Project structure reorganization
+- [ ] Initial Terraform deployment
+- [ ] Dockerfile creation
+- [ ] GitHub Actions CI/CD pipeline
+
+### Upcoming Phases
+
+- **Phase 1**: MongoDB integration (collections, indexes, CRUD operations)
+- **Phase 2**: Facebook Marketplace scraper
+- **Phase 3**: eBay Motors & Craigslist scrapers
+- **Phase 4**: AI deal evaluation (GPT-4 + market data)
+- **Phase 5**: Daily SMS notifications
+- **Phase 6**: Testing & quality assurance
+- **Phase 7**: Deployment automation (GitHub Actions)
+- **Phase 8**: Web dashboard (FastAPI + Power BI)
+- **Phase 9**: Advanced features (price alerts, saved searches, ML scoring)
+
+**Timeline**: ~6 weeks to MVP (Phase 5), 8-10 weeks to dashboard
+
+## 📊 Vehicle Knowledge Base
 
 Currently tracking **12 overlanding platforms:**
 
@@ -144,7 +270,7 @@ Currently tracking **12 overlanding platforms:**
 |----------|-------------|-------------|----------|-------------|
 | Jeep Wrangler JK | 7/10 | 9/10 | 10/10 | $8k-$25k |
 | Jeep Wrangler TJ | 7/10 | 8/10 | 10/10 | $5k-$15k |
-| Toyota 4Runner 4th  | 9/10 | 8/10 | 8/10 | $8k-$18k |
+| Toyota 4Runner 4th | 9/10 | 8/10 | 8/10 | $8k-$18k |
 | Toyota 4Runner 5th | 9/10 | 9/10 | 8/10 | $15k-$45k |
 | Toyota Tacoma | 9/10 | 8/10 | 9/10 | $8k-$35k |
 | Land Cruiser 100 | 9/10 | 9/10 | 7/10 | $8k-$20k |
@@ -162,214 +288,109 @@ Each platform includes:
 - Common issues and red flags
 - Platform-specific expert notes
 
-## 🔧 Upgrade Cost Estimates
-
-Example upgrades with cost estimates:
+## 🧠 Value Scoring Algorithm
 
 ```
-All-Terrain Tires: $1,200
-Basic Lift (2-3"): $800
-Rock Sliders: $600
-Skid Plates: $400
-Roof Rack: $800
-Recovery Gear: $300
-LED Lighting: $400
-Dual Battery: $600
-Rooftop Tent: $1,500
+Value Score (0-100) = 
+  Discount % (0-40 points) +
+  Platform Quality (0-30 points) +
+  Price/Budget Ratio (0-20 points) +
+  Mileage Factor (0-10 points) -
+  Red Flag Penalties (30 points each)
 ```
 
-## 📁 Project Structure
+### Recommendations
+- **80-100:** 🔥 STRONG BUY - ACT FAST
+- **65-79:** ✅ GOOD DEAL - INVESTIGATE
+- **50-64:** ⚖️ FAIR - CONSIDER IF INSPECTED  
+- **0-49:** 👎 PASS - WEAK VALUE
+- **Red Flags:** 🚫 AUTO-REJECT
 
-```
-OverlandFinder/
-├── deal_finder_agent.py       # Main CLI agent
-├── deal_finder_server.py      # HTTP server mode
-├── daily_monitor.py           # Daily check & SMS notifications
-├── sms_notifier.py            # SMS via Verizon email gateway
-├── vehicle_database.py        # Knowledge base of 12 platforms
-├── value_evaluator.py         # Scoring and evaluation logic
-├── vin_decoder.py             # VIN decoder (NHTSA vPIC API)
-├── requirements.txt           # Python dependencies
-├── .env                       # Configuration
-├── .vscode/
-│   ├── launch.json           # Debug configurations
-│   └── tasks.json            # Build/run tasks
-├── overlanding_deals.json    # Saved deals database
-└── README.md                 # This file
-```
+### Red Flags (Auto-Reject)
+- ⛔ "Export Only" / "Cannot be registered in CO"
+- ⛔ Rollover, undercarriage, flood, or fire damage
+- ⛔ Over budget without exceptional value
 
-## 🔍 VIN Decoder
+## 🔧 Technology Stack
 
-Integrated VIN decoder using **NHTSA vPIC API** (free government service).
+| Category | Technology | Purpose |
+|----------|-----------|---------|
+| **Cloud Platform** | Microsoft Azure | Hosting, compute, storage |
+| **Infrastructure** | Terraform 1.5+ | IaC for all Azure resources |
+| **Compute** | Azure Container Apps Jobs | Scheduled scraper + evaluator |
+| | Azure Functions (Y1) | Daily SMS timer trigger |
+| **Database** | MongoDB Atlas M0 | Deal storage (FREE tier) |
+| **Storage** | Azure Blob Storage | Images, logs, backups |
+| **Secrets** | Azure Key Vault | Credentials, API keys (FREE) |
+| **Registry** | Azure Container Registry | Docker images (Basic SKU) |
+| **Monitoring** | Application Insights | Telemetry, alerts (FREE 5GB) |
+| **Auth** | Managed Identity (Entra ID) | Passwordless Azure services |
+| **AI** | Azure AI Foundry (GPT-4) | Deal evaluation |
+| **Language** | Python 3.11+ | Application code |
+| **CI/CD** | GitHub Actions | Automated deployment |
+| **Dashboard** | FastAPI + Power BI | Web UI (Phase 8) |
 
-### Features:
-- ✅ **ISO 3779 VIN Validation** - Validates check digit and format
-- ✅ **Comprehensive Specs** - Gets 145+ vehicle data points from NHTSA
-- ✅ **Free API** - No registration or API keys required
-- ✅ **AI Integration** - AI agent can decode VINs in conversation
+## 📈 Cost Breakdown
 
-### What You Get:
-- Make, Model, Year, Trim
-- Engine: Cylinders, Displacement (L), Fuel Type, Horsepower
-- Body Type & Door Count
-- Transmission Type & Speeds
-- Drive Type (4WD, AWD, FWD, RWD)
-- GVWR (Gross Vehicle Weight Rating)
+**MVP (Phases 1-5)**: ~$7-8/month
+- Container Apps Jobs (4h schedule): ~$2-3
+- Container Registry (Basic): ~$5
+- Storage Account: ~$0.10
+- MongoDB Atlas M0: FREE
+- Azure Functions (Consumption): FREE
+- Key Vault: FREE
+- Application Insights (< 5GB): FREE
 
-### Usage Examples:
+**With Dashboard (Phase 8)**: ~$17-31/month
+- Add Container App (API): ~$10-15
+- Add Power BI Embedded (if used): ~$0-$8
+- All above: same costs
 
-**In Agent Conversation:**
-```
-You: Decode this VIN: 1C4PJMBS9HW664582
-Agent: **2017 JEEP Cherokee** Trailhawk
+## 🔐 Security Best Practices
 
-**Engine:**
-- 6 cylinders, 3.2L, Gasoline, 271 HP
+- **No hardcoded secrets**: All credentials in Azure Key Vault
+- **Managed Identity**: Passwordless authentication to Azure services
+- **Least privilege RBAC**: Service principals with minimal permissions
+- **Network isolation**: Container Apps in virtual network (optional for Phase 9)
+- **Terraform state**: Remote backend with encryption (recommended for teams)
+- **Secrets rotation**: Automated via Key Vault alerts (Phase 9)
 
-**Body:** Sport Utility Vehicle (SUV)/Multi-Purpose Vehicle (MPV), 4 doors
+## 📈 Monitoring & Alerts
 
-**Drive:** 4WD/4-Wheel Drive/4x4
-```
+**Application Insights** tracks:
+- Scraper success/failure rates
+- VIN decoding performance
+- AI evaluation latency
+- Deal count per run
+- SMS delivery status
 
-**Standalone Python:**
-```python
-from vin_decoder import decode_vin
+**Alerts** (configured in Terraform):
+- Job failures (>2 consecutive failures)
+- High latency (>30s average)
+- Storage quota (>80%)
 
-specs = decode_vin("1C4PJMBS9HW664582")
-print(f"{specs.year} {specs.make} {specs.model}")
-# Output: 2017 JEEP Cherokee
-```
-
-### Credit:
-VIN decoder implementation adapted from [VehicleWellnessCenter](https://github.com/mbroadfo/VehicleWellnessCenter) by @mbroadfo.
-
-## 🎯 Next Steps (V2 Development)
-
-### Web Scraping Integration
-Add automated scraping for:
-- Facebook Marketplace
-- Craigslist
-- AutoTrader.com
-- Cars.com
-- Auction sites (Copart via brokers)
-
-### Monitoring System
-- Schedule checks every 4 hours
-- Track seen listings to avoid duplicates
-- Send notifications for hot deals (>80 value score)
-
-### Enhanced Evaluation
-- Integrate actual market price APIs (KBB, NADA)
-- Photo analysis for damage assessment
-- Historical price tracking
-
-### Deployment
-- Run as containerized service
-- Deploy to Azure or local server
-- Web dashboard for viewing/managing deals
+Access dashboards: Azure Portal → Application Insights → `ai-overland-finder-dev`
 
 ## 🤝 Contributing
 
-Want to add vehicle platforms or improve the scoring? Edit:
-- `vehicle_database.py` - Add new platforms
-- `value_evaluator.py` - Adjust scoring weights
+This is a personal project, but suggestions welcome! Open an issue or PR for:
+- New marketplace scrapers
+- Evaluation criteria improvements
+- Dashboard features
+- Cost optimizations
 
-## 📜 License
+## 📄 License
 
-MIT License - Build cool stuff!
+MIT License - See LICENSE file for details
 
-## 💡 Tips for Success
+## 🙏 Acknowledgments
 
-1. **Be Patient:** Great deals take time to surface
-2. **Act Fast:** When value score > 80, move quickly  
-3. **Inspect In Person:** Never buy sight unseen
-4. **Check Title:** Verify Colorado registration eligibility
-5. **Budget for Repairs:** Even "good" deals may need work
-6. **Join Communities:** Overlanding forums can help evaluate
-
-Happy hunting! 🏔️🚙
+- **NHTSA vPIC API** for VIN decoding
+- **Azure Developer CLI** team for excellent IaC tooling
+- **UHC EA Team** for Terraform and Azure best practices inspiration
 
 ---
 
----
+**Questions?** Open an issue or contact [@mbroadfo](https://github.com/mbroadfo)
 
-## 📱 SMS Notifications (New!)
-
-Get **one daily text message** with your top deals via Verizon's email-to-SMS gateway.
-
-### Setup:
-
-1. **Get Gmail App Password** (if using Gmail):
-   - Visit: https://support.google.com/accounts/answer/185833
-   - Generate an App Password for "Mail"
-
-2. **Update `.env`:**
-```env
-ENABLE_SMS_NOTIFICATIONS=true
-SMS_RECIPIENT=7208399656@vtext.com
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=your-app-password
-```
-
-3. **Test it:**
-```powershell
-python sms_notifier.py --test
-```
-
-4. **Run daily checks:**
-```powershell
-python daily_monitor.py
-```
-
-### SMS Format:
-```
-Daily update:
-3 deals! Top: 2014 Wrangler $8,500
-https://facebook.com/...
-```
-
-- **Sent:** Once per day maximum
-- **Length:** Under 140 characters
-- **Retry:** 3 attempts if sending fails
-
-## 📝 Changelog
-
-### v1.1.0 (2026-02-22)
-
-**New Feature: VIN Decoder**
-- ✅ Added NHTSA vPIC API integration for VIN decoding
-- ✅ ISO 3779 VIN validation with check digit verification
-- ✅ New AI agent tool: `decode_vin()` - Get vehicle specs from VIN
-- ✅ Standalone module: `vin_decoder.py` with CLI testing
-- ✅ Returns 145+ data points: make, model, year, engine, transmission, body, drive type, GVWR
-- ✅ Free government API - no registration or API keys needed
-- Credit: VIN decoder adapted from [VehicleWellnessCenter](https://github.com/mbroadfo/VehicleWellnessCenter)
-
-### v1.0.0 (2026-02-21)
-
-**Initial Release - Fully Functional**
-
-**Bug Fixes:**
-- Fixed syntax error in docstrings (removed duplicate `"""` markers in `deal_finder_agent.py` and `deal_finder_server.py`)
-- Fixed type hint errors: Changed `str` with `None` defaults to `Optional[str]` in `evaluate_deal()` parameters
-- Fixed datetime subtraction error in `daily_monitor.py` by adding None check for `last_notification_time`
-- Added type ignore comments for Azure AI SDK preview API false positives in `deal_finder_server.py`
-- Suppressed optional Azure telemetry environment variable warnings by adding empty values to `.env`
-- Added missing default excludes (`**/.*`, `**/node_modules`) to `pyrightconfig.json` and `pyproject.toml`
-
-**Configuration:**
-- Created comprehensive Pylance/Pyright configuration (`pyrightconfig.json`, `pyproject.toml`) with type checking mode: basic
-- Created `.markdownlint.json` to suppress cosmetic markdown linting rules
-- Configured `.vscode/settings.json` for optimal Python analysis experience
-
-**Quality:**
-- ✅ All Python modules import cleanly without errors or warnings
-- ✅ 0 syntax errors, 0 type errors, 0 linting errors
-- ✅ Full type hint compatibility with Python 3.13
-- ✅ All dependencies installed and verified
-
----
-
-*Built with Microsoft Agent Framework | Powered by AI | Tuned for Colorado overlanding*
+**Status**: 🚧 Active development - Phase 0 (Infrastructure Setup)
