@@ -1,0 +1,27 @@
+# Agent Framework - pinned versions for stability
+agent-framework-azure-ai==1.0.0b260107
+agent-framework-core==1.0.0b260107
+azure-ai-agentserver-core==1.0.0b10
+azure-ai-agentserver-agentframework==1.0.0b10
+azure-identity>=1.25.1
+
+# Web scraping and data extraction
+beautifulsoup4==4.12.3
+requests==2.31.0
+selenium==4.27.1
+webdriver-manager==4.0.2
+
+# Data processing
+pandas==2.2.3
+python-dotenv==1.0.1
+
+# Scheduling for periodic monitoring
+schedule==1.2.2
+APScheduler==3.10.4
+
+# Debugging
+debugpy==1.8.11
+agent-dev-cli>=0.0.1b260205
+
+# Optional: Email notifications
+# smtplib is built-in

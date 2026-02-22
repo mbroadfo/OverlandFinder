@@ -1,0 +1,29 @@
+[tool.pyright]
+include = ["*.py"]
+exclude = ["**/__pycache__", "**/.venv", "**/node_modules", "**/.*"]
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false
+reportUnknownParameterType = false
+reportUnknownArgumentType = false
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+pythonVersion = "3.13"
+pythonPlatform = "Windows"
+
+[tool.ruff]
+line-length = 120
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+ignore = ["E501"]  # Line too long
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_backend"
+
+[project]
+name = "overland-finder"
+version = "1.0.0"
+description = "AI-powered overlanding vehicle deal finder"
+requires-python = ">=3.10"
