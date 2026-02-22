@@ -13,7 +13,7 @@ webdriver-manager==4.0.2
 
 # Data processing
 pandas==2.2.3
-python-dotenv==1.0.1
+python-dotenv>=1.2.1
 
 # Scheduling for periodic monitoring
 schedule==1.2.2

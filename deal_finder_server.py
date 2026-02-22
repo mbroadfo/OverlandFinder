@@ -88,6 +88,7 @@ When evaluating deals, be thorough and analytical. Consider:
             tools=[
                 self.tools.get_target_vehicles,
                 self.tools.get_vehicle_knowledge,
+                self.tools.decode_vin,
                 self.tools.evaluate_deal,
                 self.tools.get_saved_deals,
             ],
@@ -123,19 +124,12 @@ async def run_server_async(port: int = 8087):
     """Run the agent as an HTTP server"""
     print(f"🚙 Starting Overland Finder Agent Server on port {port}...")
     
-    # Build workflow
+    # Initialize executor and agent
     executor = DealFinderWorkflowExecutor()
+    await executor.initialize()
     
-    workflow = (
-        WorkflowBuilder()
-        .add_executor(executor)  # type: ignore[attr-defined]
-        .set_start_executor(executor.id)
-        .build()
-    )
-    
-    # Convert to agent and run as server
-    agent = workflow.as_agent()
-    await from_agent_framework(agent, port=port).run_async()  # type: ignore[call-overload]
+    # Run agent as server
+    await from_agent_framework(executor.agent, port=port).run_async()  # type: ignore[call-overload]
 
 
 def run_server(port: int = 8087):

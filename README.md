@@ -33,6 +33,7 @@ This is an intelligent multi-agent system that:
 - ✅ Upgrade cost estimation
 - ✅ HTTP server mode for production
 - ✅ VS Code debugging integration
+- ✅ **VIN Decoder (NHTSA vPIC API)** - Decode VIN to get vehicle specs
 
 ### Planned (V2):
 - 🔄 Automated web scraping (Facebook Marketplace, Craigslist, AutoTrader, auction sites)
@@ -96,6 +97,9 @@ python deal_finder_server.py --server
 ```
 You: What vehicles are you looking for?
 Agent: [Lists all target vehicles with search parameters]
+
+You: Decode this VIN: 1C4PJMBS9HW664582
+Agent: [Returns full vehicle specs from NHTSA - 2017 Jeep Cherokee Trailhawk, 3.2L V6, 4WD, etc.]
 
 You: Tell me about the Jeep Wrangler JK platform
 Agent: [Detailed breakdown: reliability 7/10, overlanding 9/10, common issues, red flags, expert notes]
@@ -184,6 +188,7 @@ OverlandFinder/
 ├── sms_notifier.py            # SMS via Verizon email gateway
 ├── vehicle_database.py        # Knowledge base of 12 platforms
 ├── value_evaluator.py         # Scoring and evaluation logic
+├── vin_decoder.py             # VIN decoder (NHTSA vPIC API)
 ├── requirements.txt           # Python dependencies
 ├── .env                       # Configuration
 ├── .vscode/
@@ -192,6 +197,51 @@ OverlandFinder/
 ├── overlanding_deals.json    # Saved deals database
 └── README.md                 # This file
 ```
+
+## 🔍 VIN Decoder
+
+Integrated VIN decoder using **NHTSA vPIC API** (free government service).
+
+### Features:
+- ✅ **ISO 3779 VIN Validation** - Validates check digit and format
+- ✅ **Comprehensive Specs** - Gets 145+ vehicle data points from NHTSA
+- ✅ **Free API** - No registration or API keys required
+- ✅ **AI Integration** - AI agent can decode VINs in conversation
+
+### What You Get:
+- Make, Model, Year, Trim
+- Engine: Cylinders, Displacement (L), Fuel Type, Horsepower
+- Body Type & Door Count
+- Transmission Type & Speeds
+- Drive Type (4WD, AWD, FWD, RWD)
+- GVWR (Gross Vehicle Weight Rating)
+
+### Usage Examples:
+
+**In Agent Conversation:**
+```
+You: Decode this VIN: 1C4PJMBS9HW664582
+Agent: **2017 JEEP Cherokee** Trailhawk
+
+**Engine:**
+- 6 cylinders, 3.2L, Gasoline, 271 HP
+
+**Body:** Sport Utility Vehicle (SUV)/Multi-Purpose Vehicle (MPV), 4 doors
+
+**Drive:** 4WD/4-Wheel Drive/4x4
+```
+
+**Standalone Python:**
+```python
+from vin_decoder import decode_vin
+
+specs = decode_vin("1C4PJMBS9HW664582")
+print(f"{specs.year} {specs.make} {specs.model}")
+# Output: 2017 JEEP Cherokee
+```
+
+### Credit:
+VIN decoder implementation adapted from [VehicleWellnessCenter](https://github.com/mbroadfo/VehicleWellnessCenter) by @mbroadfo.
 
 ## 🎯 Next Steps (V2 Development)
 
@@ -209,9 +259,9 @@ Add automated scraping for:
 - Send notifications for hot deals (>80 value score)
 
 ### Enhanced Evaluation
-- Integrate actual market price APIs
-- Add VIN decode for accurate specs
+- Integrate actual market price APIs (KBB, NADA)
 - Photo analysis for damage assessment
+- Historical price tracking
 
 ### Deployment
 - Run as containerized service
@@ -285,6 +335,17 @@ https://facebook.com/...
 - **Retry:** 3 attempts if sending fails
 
 ## 📝 Changelog
+
+### v1.1.0 (2026-02-22)
+
+**New Feature: VIN Decoder**
+- ✅ Added NHTSA vPIC API integration for VIN decoding
+- ✅ ISO 3779 VIN validation with check digit verification
+- ✅ New AI agent tool: `decode_vin()` - Get vehicle specs from VIN
+- ✅ Standalone module: `vin_decoder.py` with CLI testing
+- ✅ Returns 145+ data points: make, model, year, engine, transmission, body, drive type, GVWR
+- ✅ Free government API - no registration or API keys needed
+- Credit: VIN decoder adapted from [VehicleWellnessCenter](https://github.com/mbroadfo/VehicleWellnessCenter)
 
 ### v1.0.0 (2026-02-21)
 

@@ -15,6 +15,7 @@ from agent_framework import WorkflowBuilder
 
 from value_evaluator import ValueEvaluator, VehicleListing, DealEvaluation
 from vehicle_database import VEHICLE_PROFILES, is_good_overlanding_platform
+from vin_decoder import decode_vin, get_vehicle_info_from_vin, get_vin_validation_error
 
 # Load environment variables
 load_dotenv(override=True)
@@ -70,6 +71,21 @@ class DealFinderTools:
                 return result
         
         return f"No detailed information found for '{vehicle_name}'. Try: Jeep Wrangler, Toyota 4Runner, Tacoma, Land Cruiser, Lexus GX470, Nissan Xterra"
+    
+    def decode_vin(
+        self,
+        vin: Annotated[str, "17-character Vehicle Identification Number to decode"]
+    ) -> str:
+        """
+        Decode a VIN to get comprehensive vehicle specifications from NHTSA.
+        
+        Returns make, model, year, engine specs, transmission, body type, and more.
+        Use this when a user provides a VIN or asks to verify vehicle details.
+        """
+        try:
+            return get_vehicle_info_from_vin(vin)
+        except Exception as e:
+            return f"VIN Decode Error: {str(e)}"
     
     def evaluate_deal(
         self,
@@ -281,6 +297,7 @@ pros/cons and provide clear recommendations.""",
             tools=[
                 tools.get_target_vehicles,
                 tools.get_vehicle_knowledge,
+                tools.decode_vin,
                 tools.evaluate_deal,
                 tools.get_saved_deals,
             ],
