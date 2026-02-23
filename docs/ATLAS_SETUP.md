@@ -40,7 +40,7 @@ During setup, Atlas will prompt for a user. If not:
 3. **Username**: `overland_app`
 4. **Password**: Click "Autogenerate Secure Password" → **COPY IT IMMEDIATELY**
    - Or create your own (32+ characters recommended)
-5. **Database User Privileges**: 
+5. **Database User Privileges**:
    - Built-in Role: **Read and write to any database**
 6. Click **"Add User"**
 

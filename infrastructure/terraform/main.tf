@@ -27,13 +27,13 @@ resource "azurerm_storage_account" "main" {
 
 resource "azurerm_storage_container" "vehicle_images" {
   name                  = "vehicle-images"
-  storage_account_id    = azurerm_storage_account.main.id
+  storage_account_name  = azurerm_storage_account.main.name
   container_access_type = "private"
 }
 
 resource "azurerm_storage_container" "logs" {
   name                  = "logs"
-  storage_account_id    = azurerm_storage_account.main.id
+  storage_account_name  = azurerm_storage_account.main.name
   container_access_type = "private"
 }
 
@@ -87,22 +87,6 @@ resource "azurerm_key_vault_access_policy" "terraform" {
 resource "azurerm_key_vault_secret" "mongodb_uri" {
   name         = "mongodb-uri"
   value        = var.mongodb_uri
-  key_vault_id = azurerm_key_vault.main.id
-  
-  depends_on = [azurerm_key_vault_access_policy.terraform]
-}
-
-resource "azurerm_key_vault_secret" "smtp_username" {
-  name         = "smtp-username"
-  value        = var.smtp_username
-  key_vault_id = azurerm_key_vault.main.id
-  
-  depends_on = [azurerm_key_vault_access_policy.terraform]
-}
-
-resource "azurerm_key_vault_secret" "smtp_password" {
-  name         = "smtp-password"
-  value        = var.smtp_password
   key_vault_id = azurerm_key_vault.main.id
   
   depends_on = [azurerm_key_vault_access_policy.terraform]

@@ -39,19 +39,6 @@ variable "mongodb_uri" {
   sensitive   = true
 }
 
-# SMTP Configuration (for SMS notifications)
-variable "smtp_username" {
-  description = "SMTP username for email/SMS"
-  type        = string
-  sensitive   = true
-}
-
-variable "smtp_password" {
-  description = "SMTP password for email/SMS"
-  type        = string
-  sensitive   = true
-}
-
 # Azure Foundry/OpenAI Configuration
 variable "foundry_endpoint" {
   description = "Azure Foundry/OpenAI endpoint URL"
