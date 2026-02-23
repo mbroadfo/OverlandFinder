@@ -32,13 +32,6 @@ variable "tags" {
   }
 }
 
-# MongoDB Atlas Configuration
-variable "mongodb_uri" {
-  description = "MongoDB Atlas connection string"
-  type        = string
-  sensitive   = true
-}
-
 # Azure Foundry/OpenAI Configuration
 variable "foundry_endpoint" {
   description = "Azure Foundry/OpenAI endpoint URL"

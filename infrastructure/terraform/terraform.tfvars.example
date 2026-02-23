@@ -5,12 +5,10 @@ project_name = "overland-finder"
 environment  = "dev"
 location     = "eastus"
 
-# MongoDB Atlas connection string (get from Atlas dashboard)
-mongodb_uri = "mongodb+srv://username:password@cluster.mongodb.net/overland_finder?retryWrites=true&w=majority"
-
-# SMTP configuration for sending SMS via email gateway
-smtp_username = "your-email@gmail.com"
-smtp_password = "your-app-specific-password"
+# Note: MongoDB URI should be manually added to Key Vault after Terraform deployment
+# Do NOT put the MongoDB connection string in this file
+# After running 'terraform apply', run:
+# az keyvault secret set --vault-name kv-overland-finder-dev --name "mongodb-uri" --value "mongodb+srv://..."
 
 # Azure Foundry/OpenAI endpoint
 foundry_endpoint = "https://your-project.openai.azure.com/"

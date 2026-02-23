@@ -137,24 +137,32 @@
    - `infrastructure/terraform/README.md` - Deployment guide, cost estimates, troubleshooting
    - Cost: ~$7-8/month MVP
 
-3. ⏳ **MongoDB Atlas Setup** (Next)
+3. ✅ **MongoDB Atlas Setup**
    - Create free M0 cluster at mongodb.com/cloud/atlas
    - Database: `overland_finder`
    - Collections: `deals`, `scrape_history`, `user_favorites`
    - Indexes: `value_score`, `timestamp`, `make`, `model`, `vin`
    - IP allowlist: `0.0.0.0/0` (for Azure Container Apps)
-   - Add connection string to `terraform.tfvars`
+   - **Save connection string** (will manually add to Key Vault after Terraform)
 
 4. ⏳ **Initial Terraform Deployment**
    ```bash
    cd infrastructure/terraform
-   cp terraform.tfvars.example terraform.tfvars
-   # Edit terraform.tfvars with MongoDB URI, SMTP creds, Foundry endpoint
-   
    terraform init
    terraform plan
    terraform apply
+   
+   # After deployment - manually add MongoDB secret to Key Vault
+   az keyvault secret set \
+     --vault-name kv-overland-finder-dev \
+     --name "mongodb-uri" \
+     --value "mongodb+srv://user:pass@cluster.mongodb.net/..."
    ```
+
+   **Why manual Key Vault?**
+   - ✅ Keeps MongoDB URI out of Terraform state files
+   - ✅ Prevents accidental git commits
+   - ✅ More secure - secrets only in Key Vault
 
 5. ⏳ **GitHub Actions CI/CD Pipeline**
    - Create service principal for GitHub
@@ -591,19 +599,18 @@
            for i, deal in enumerate(deals, 1):
                message += f"{i}. {deal['listing']['year']} {deal['listing']['make']} {deal['listing']['model']} - ${deal['listing']['price']:,} ({deal['evaluation']['value_score']:.0f}/100)\n{deal['url']}\n"
        
-       # 3. Send SMS via SMTP
-       smtp_user = vault_client.get_secret("smtp-username").value
-       smtp_pass = vault_client.get_secret("smtp-password").value
-       
+       # 3. Send SMS via email-to-SMS gateway (NO authentication required!)
        msg = MIMEText(message)
-       msg['To'] = "7208399656@vtext.com"
-       msg['From'] = smtp_user
+       msg['To'] = "7208399656@vtext.com"  # Verizon email-to-SMS gateway
+       msg['From'] = "noreply@overlandfinder.com"
        
+       # Verizon gateway accepts emails from any sender - no SMTP auth needed
        with smtplib.SMTP("smtp.gmail.com", 587) as server:
            server.starttls()
-           server.login(smtp_user, smtp_pass)
-           server.send_message(msg)
+           server.sendmail(msg['From'], msg['To'], msg.as_string())
    ```
+
+   **Note:** No SMTP username/password needed! Verizon email-to-SMS gateway is open.
 
 3. ✅ **Configure Timer Schedule**
    ```json
@@ -648,9 +655,9 @@
 
 **Deliverables:**
 - ✅ Azure Function running daily at 8 AM
-- ✅ SMS sent via Verizon email gateway
+- ✅ SMS sent via Verizon email-to-SMS gateway (NO authentication required)
 - ✅ No cost (under 1M executions)
-- ✅ Managed Identity (no hardcoded SMTP credentials)
+- ✅ Managed Identity for Key Vault access
 
 **Dependencies:** `azure-functions`, `pymongo`
 
@@ -660,15 +667,17 @@
 **Goal:** Finalize environment configuration with Managed Identity
 
 **Tasks:**
-1. ✅ **Azure Key Vault Secrets**
+1. ✅ **Azure Key Vault Secrets (Manual Management)**
    ```bash
-   # Store all secrets (no more .env files!)
-   az keyvault secret set --vault-name kv-overland-finder --name "mongodb-uri" --value "mongodb+srv://..."
-   az keyvault secret set --vault-name kv-overland-finder --name "smtp-username" --value "..."
-   az keyvault secret set --vault-name kv-overland-finder --name "smtp-password" --value "..."
-   az keyvault secret set --vault-name kv-overland-finder --name "foundry-endpoint" --value "https://..."
-   az keyvault secret set --vault-name kv-overland-finder --name "foundry-model" --value "gpt-4o"
+   # MongoDB URI - manually added AFTER Terraform deployment
+   az keyvault secret set --vault-name kv-overland-finder-dev --name "mongodb-uri" --value "mongodb+srv://..."
+   
+   # Azure Foundry/OpenAI - will be added in Terraform
+   az keyvault secret set --vault-name kv-overland-finder-dev --name "foundry-endpoint" --value "https://..."
+   az keyvault secret set --vault-name kv-overland-finder-dev --name "foundry-model" --value "gpt-4o"
    ```
+
+   **Note:** No SMTP credentials needed! Email-to-SMS gateway requires no authentication.
 
 2. ✅ **Grant Managed Identity Access**
    ```bash
@@ -695,9 +704,10 @@
    foundry_endpoint = vault_client.get_secret("foundry-endpoint").value
    ```
 
-4. ✅ **Remove `.env` File**
-   - Delete local `.env` (no longer needed)
-   - Add `.env` to `.gitignore` (prevent accidental commits)
+4. ✅ **No `.env` File Needed**
+   - All secrets in Azure Key Vault (accessed via Managed Identity)
+   - `.env` only needed for local development (not production)
+   - Already in `.gitignore` (prevent accidental commits)
 
 5. ✅ **Document Configuration**
    - Create `CONFIG.md` with Key Vault secret names

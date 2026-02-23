@@ -1,185 +1,181 @@
 # 📱 SMS Notification Setup Guide
 
-## Quick Start
+## Overview
 
-### 1. Get Gmail App Password
+SMS notifications in OverlandFinder are sent via **Azure Functions** using Verizon's email-to-SMS gateway (NO password required). The function runs daily at 8:00 AM and queries MongoDB for top deals.
 
-**Why?** Gmail requires an "App Password" for third-party apps (not your regular password).
+## Architecture
 
-1. Go to your Google Account: https://myaccount.google.com/
-2. Navigate to **Security** → **2-Step Verification** (enable if not already)
-3. Scroll to **App passwords**: https://myaccount.google.com/apppasswords
-4. Generate a new app password:
-   - App: **Mail**
-   - Device: **Windows Computer**
-5. Copy the 16-character password (e.g., `abcd efgh ijkl mnop`)
-
-### 2. Update `.env` File
-
-Open `.env` and add your SMTP credentials:
-
-```env
-# Enable SMS
-ENABLE_SMS_NOTIFICATIONS=true
-SMS_RECIPIENT=7208399656@vtext.com
-
-# SMTP (Gmail)
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your-email@gmail.com
-SMTP_PASSWORD=abcdefghijklmnop
+```
+Azure Function (Timer Trigger: Daily @ 8AM)
+    ↓
+Query MongoDB Atlas (top 3 deals, last 24h)
+    ↓
+Send email to: 7208399656@vtext.com
+    ↓
+Verizon converts email → SMS (FREE)
 ```
 
-**IMPORTANT:** Remove spaces from the app password!
+**No SMTP authentication needed!** Verizon email-to-SMS gateway accepts emails from any sender.
 
-### 3. Test SMS
+## Setup Steps
 
-```powershell
-# Activate virtual environment
-.\.venv\Scripts\Activate.ps1
+### 1. Verify SMS Recipient in Terraform
 
-# Test sending SMS
-python sms_notifier.py --test
+Check `infrastructure/terraform/terraform.tfvars`:
+
+```hcl
+# SMS Recipient (Verizon email-to-SMS gateway)
+sms_recipient = "7208399656@vtext.com"
 ```
 
-You should receive:
-```
-Daily update:
-Test from Overland Finder
-https://example.com
-```
+### 2. Deploy Azure Function
 
-### 4. Run Daily Monitor
+The Azure Function is automatically created by Terraform:
 
-**Manual check:**
-```powershell
-python daily_monitor.py
+```bash
+cd infrastructure/terraform
+terraform apply
 ```
 
-**Check status:**
-```powershell
-python daily_monitor.py --status
-```
+This creates:
+- Function App (Consumption plan - FREE)
+- Timer trigger (runs daily at 8:00 AM)
+- Managed Identity for Key Vault access
+- Connection to MongoDB Atlas
 
-**Force send (ignore 24hr limit):**
-```powershell
-python daily_monitor.py --force
+### 3. Deploy Function Code
+
+After infrastructure is deployed:
+
+```bash
+# Navigate to Functions directory
+cd functions/DailySMSDigest
+
+# Deploy function code
+func azure functionapp publish overland-sms-function-dev
 ```
 
 ## Message Format
 
-```
-Daily update:
-{summary}
-{url}
-```
+Azure Function sends via email-to-SMS (max 140 characters):
 
-**Example 1 (deals found):**
 ```
-Daily update:
-3 deals! Top: 2014 Wrangler $8,500
-https://facebook.com/marketplace/item/123
+🔥 Top deals:
+1. 2014 Jeep Wrangler - $8,500 (85/100)
+https://facebook.com/...
 ```
 
-**Example 2 (no deals):**
+**Example (no deals):**
 ```
-Daily update:
-No new hot deals today
-https://facebook.com/marketplace
+No new deals found in last 24 hours 😔
 ```
 
-## Automation (Optional)
+## Testing SMS Locally
 
-### Windows Task Scheduler
+Before deploying to Azure, test locally:
 
-1. Open Task Scheduler
-2. Create Basic Task
-3. **Trigger:** Daily at 8:00 AM
-4. **Action:** Start a program
-   - Program: `C:\Users\Mike\Documents\Code\OverlandFinder\.venv\Scripts\python.exe`
-   - Arguments: `daily_monitor.py`
-   - Start in: `C:\Users\Mike\Documents\Code\OverlandFinder`
+```powershell
+# Navigate to functions directory
+cd functions/DailySMSDigest
 
-### Or use Python scheduler (runs continuously):
+# Run function locally (requires Azure Functions Core Tools)
+func start
+```
+
+Or test the SMS sending logic:
 
 ```python
-# schedule_monitor.py
-import schedule
-import time
-from daily_monitor import DailyMonitor
+# test_sms.py
+import smtplib
+from email.mime.text import MIMEText
 
-monitor = DailyMonitor()
+msg = MIMEText("Test from OverlandFinder!")
+msg['To'] = "7208399656@vtext.com"
+msg['From'] = "test@overlandfinder.com"
 
-# Run daily at 8 AM
-schedule.every().day.at("08:00").do(monitor.run_daily_check_sync)
+with smtplib.SMTP("smtp.gmail.com", 587) as server:
+    server.starttls()
+    server.sendmail("test@overlandfinder.com", "7208399656@vtext.com", msg.as_string())
+```
 
-print("📅 Scheduler running... (Ctrl+C to stop)")
-while True:
-    schedule.run_pending()
-    time.sleep(60)  # Check every minute
+**Note:** No authentication required for Verizon email-to-SMS gateway!
+
+## Monitoring
+
+View function execution logs in Azure:
+
+```bash
+# Stream logs in real-time
+func azure functionapp logstream overland-sms-function-dev
+
+# Or view in Application Insights
+# Azure Portal → Application Insights → Logs
+```
+
+**KQL Query for SMS history:**
+```kusto
+traces
+| where operation_Name == "DailySMSDigest"
+| where message contains "SMS sent" or message contains "No deals"
+| project timestamp, message
+| order by timestamp desc
 ```
 
 ## Troubleshooting
 
-### "SMTP Authentication failed"
-- Double-check SMTP_USERNAME is your full email
-- Verify SMTP_PASSWORD is the App Password (no spaces!)
-- Make sure 2-Step Verification is enabled
-- Try regenerating the App Password
+### "SMS not received"
+- Check Verizon number is correct: `7208399656@vtext.com`
+- Verify Azure Function executed: Check Application Insights logs
+- Check phone has cellular service
+- Try other gateways:
+  - AT&T: `number@txt.att.net`
+  - T-Mobile: `number@tmomail.net`
+  - Sprint: `number@messaging.sprintpcs.com`
 
-### "No module named 'smtplib'"
-- This is a built-in Python module, should always be available
-- Try reinstalling Python if issue persists
+### "Function not running"
+```bash
+# Check function status
+az functionapp show --name overland-sms-function-dev --resource-group rg-overland-finder-dev
 
-### "SMS not sending"
-- Check your internet connection
-- Verify Gmail isn't blocking the app password
-- Check Gmail's "Less secure app access" settings
-- Try a different SMTP server (Outlook.com, Yahoo, etc.)
-
-### "Notification sent but not received"
-- Verify phone number in SMS_RECIPIENT is correct
-- Verizon gateway: `number@vtext.com`
-- AT&T gateway: `number@txt.att.net`
-- T-Mobile gateway: `number@tmomail.net`
-- Sprint gateway: `number@messaging.sprintpcs.com`
-
-## Advanced: Using Different Email Providers
-
-### Outlook/Hotmail
-```env
-SMTP_SERVER=smtp-mail.outlook.com
-SMTP_PORT=587
-SMTP_USERNAME=your-email@outlook.com
-SMTP_PASSWORD=your-password
+# Verify timer trigger
+func azure functionapp list-functions overland-sms-function-dev
 ```
 
-### Yahoo
-```env
-SMTP_SERVER=smtp.mail.yahoo.com
-SMTP_PORT=587
-SMTP_USERNAME=your-email@yahoo.com
-SMTP_PASSWORD=your-app-password
-```
+### "Can't access MongoDB"
+- Verify Managed Identity has Key Vault access
+- Check MongoDB URI in Key Vault is correct:
+  ```bash
+  az keyvault secret show --vault-name kv-overland-finder-dev --name "mongodb-uri"
+  ```
 
-## Security Notes
+## Email-to-SMS Gateway Reference
 
-- ⚠️ Never commit `.env` to Git (it's in `.gitignore`)
-- 🔒 App Passwords are safer than your main password
-- 🚫 Don't share your SMTP credentials
-- ✅ App Passwords can be revoked anytime from Google
+Different carriers have different gateways:
 
-## Daily Flow
+| Carrier | Gateway Format |
+|---------|----------------|
+| Verizon | `number@vtext.com` |
+| AT&T | `number@txt.att.net` |
+| T-Mobile | `number@tmomail.net` |
+| Sprint | `number@messaging.sprintpcs.com` |
+| Virgin Mobile | `number@vmobl.com` |
 
-1. **8:00 AM:** Scheduled check runs
-2. **Agent scans** saved deals database
-3. **If 24+ hours** since last SMS:
-   - Get top 3 deals (score ≥65)
-   - Format message (<140 chars)
-   - Send via email → SMS gateway
-   - Record timestamp
-4. **If <24 hours:** Skip (only 1 SMS per day)
+To change your carrier, update `terraform.tfvars` and re-run `terraform apply`.
+
+## How It Works
+
+1. **8:00 AM daily:** Azure Timer Trigger activates function
+2. **Function authenticates** to Key Vault using Managed Identity
+3. **Gets MongoDB URI** from Key Vault
+4. **Queries MongoDB** for top 3 deals (last 24h, score ≥65)
+5. **Formats SMS message** (<140 characters)
+6. **Sends email** to `7208399656@vtext.com` (no auth required)
+7. **Verizon gateway** converts email → SMS and delivers
+8. **Logs execution** to Application Insights
+
+**Cost:** $0/month (Consumption plan, <1M executions)
 
 ---
 
-**Ready?** Run `python sms_notifier.py --test` to send your first text! 📱
+**Ready to deploy?** Follow Phase 5 in the Evolution Plan! 🚀

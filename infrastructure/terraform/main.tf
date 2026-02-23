@@ -84,13 +84,8 @@ resource "azurerm_key_vault_access_policy" "terraform" {
 }
 
 # Store secrets in Key Vault
-resource "azurerm_key_vault_secret" "mongodb_uri" {
-  name         = "mongodb-uri"
-  value        = var.mongodb_uri
-  key_vault_id = azurerm_key_vault.main.id
-  
-  depends_on = [azurerm_key_vault_access_policy.terraform]
-}
+# Note: mongodb-uri should be manually added after deployment via:
+# az keyvault secret set --vault-name <vault-name> --name "mongodb-uri" --value "<connection-string>"
 
 resource "azurerm_key_vault_secret" "foundry_endpoint" {
   name         = "foundry-endpoint"

@@ -41,11 +41,10 @@ code terraform.tfvars
 ```
 
 Required variables:
-- `mongodb_uri` - Get from MongoDB Atlas
-- `smtp_username` - Your Gmail address
-- `smtp_password` - Gmail app-specific password
 - `foundry_endpoint` - Azure Foundry/OpenAI endpoint
 - `foundry_model_deployment` - Model name (e.g., gpt-4o)
+
+Note: MongoDB URI is NOT in terraform.tfvars - you'll add it manually to Key Vault after deployment (Step 7)
 
 ### 3. Initialize Terraform
 
@@ -70,7 +69,7 @@ terraform apply
 
 Type `yes` to confirm. This will:
 - Create all Azure resources (~5-10 minutes)
-- Store secrets in Key Vault
+- Create Key Vault (ready for secrets)
 - Output important values (container registry URL, resource group name, etc.)
 
 ### 6. Save Outputs
@@ -84,6 +83,23 @@ terraform output resource_group_name
 terraform output container_registry_login_server
 terraform output -raw container_registry_admin_password
 ```
+
+### 7. Add MongoDB Secret to Key Vault
+
+After Terraform deployment completes, manually add your MongoDB connection string:
+
+```bash
+# Get the Key Vault name from Terraform output
+VAULT_NAME=$(terraform output -raw key_vault_name)
+
+# Add MongoDB URI (replace with your actual connection string)
+az keyvault secret set \
+  --vault-name $VAULT_NAME \
+  --name "mongodb-uri" \
+  --value "mongodb+srv://mbroadfo_db_user:<db_password>@overland-finder-cluster.tfehxpn.mongodb.net/?appName=overland-finder-cluster"
+```
+
+This keeps your MongoDB credentials out of Terraform state files and version control.
 
 ## 🔧 Common Commands
 
