@@ -32,19 +32,6 @@ variable "tags" {
   }
 }
 
-# Azure Foundry/OpenAI Configuration
-variable "foundry_endpoint" {
-  description = "Azure Foundry/OpenAI endpoint URL"
-  type        = string
-  sensitive   = true
-}
-
-variable "foundry_model_deployment" {
-  description = "Azure Foundry model deployment name"
-  type        = string
-  default     = "gpt-4o"
-}
-
 # Container Apps Configuration
 variable "scraper_schedule" {
   description = "Cron schedule for scraper job (every 4 hours by default)"

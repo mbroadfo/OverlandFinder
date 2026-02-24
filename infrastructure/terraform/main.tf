@@ -83,25 +83,13 @@ resource "azurerm_key_vault_access_policy" "terraform" {
   ]
 }
 
-# Store secrets in Key Vault
-# Note: mongodb-uri should be manually added after deployment via:
-# az keyvault secret set --vault-name <vault-name> --name "mongodb-uri" --value "<connection-string>"
-
-resource "azurerm_key_vault_secret" "foundry_endpoint" {
-  name         = "foundry-endpoint"
-  value        = var.foundry_endpoint
-  key_vault_id = azurerm_key_vault.main.id
-  
-  depends_on = [azurerm_key_vault_access_policy.terraform]
-}
-
-resource "azurerm_key_vault_secret" "foundry_model" {
-  name         = "foundry-model"
-  value        = var.foundry_model_deployment
-  key_vault_id = azurerm_key_vault.main.id
-  
-  depends_on = [azurerm_key_vault_access_policy.terraform]
-}
+# Secrets Management:
+# Terraform does NOT create any secrets in Key Vault
+# All secrets must be manually added after deployment via Azure CLI:
+#
+# az keyvault secret set --vault-name kv-overland-finder-dev --name "mongodb-uri" --value "mongodb+srv://..."
+# az keyvault secret set --vault-name kv-overland-finder-dev --name "foundry-endpoint" --value "https://..."
+# az keyvault secret set --vault-name kv-overland-finder-dev --name "foundry-model" --value "gpt-4o"
 
 # Container Registry (for Docker images)
 resource "azurerm_container_registry" "main" {
