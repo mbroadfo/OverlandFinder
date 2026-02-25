@@ -5,6 +5,11 @@ output "resource_group_name" {
   value       = azurerm_resource_group.main.name
 }
 
+output "key_vault_name" {
+  description = "Name of the Key Vault"
+  value       = azurerm_key_vault.main.name
+}
+
 output "key_vault_uri" {
   description = "URI of the Key Vault"
   value       = azurerm_key_vault.main.vault_uri
@@ -15,21 +20,14 @@ output "storage_account_name" {
   value       = azurerm_storage_account.main.name
 }
 
-output "container_registry_login_server" {
-  description = "Login server of the container registry"
-  value       = azurerm_container_registry.main.login_server
+output "function_app_name" {
+  description = "Name of the Function App (hosts all 4 functions)"
+  value       = azurerm_linux_function_app.main.name
 }
 
-output "container_registry_admin_username" {
-  description = "Admin username for container registry"
-  value       = azurerm_container_registry.main.admin_username
-  sensitive   = true
-}
-
-output "container_registry_admin_password" {
-  description = "Admin password for container registry"
-  value       = azurerm_container_registry.main.admin_password
-  sensitive   = true
+output "function_app_default_hostname" {
+  description = "Default hostname of the Function App"
+  value       = azurerm_linux_function_app.main.default_hostname
 }
 
 output "application_insights_instrumentation_key" {
@@ -44,27 +42,11 @@ output "application_insights_connection_string" {
   sensitive   = true
 }
 
-output "container_apps_environment_id" {
-  description = "ID of the Container Apps environment"
-  value       = azurerm_container_app_environment.main.id
-}
-
-output "scraper_job_name" {
-  description = "Name of the scraper Container Apps Job"
-  value       = azurerm_container_app_job.scraper.name
-}
-
-output "function_app_name" {
-  description = "Name of the Function App"
-  value       = azurerm_linux_function_app.sms.name
-}
-
 output "managed_identity_client_id" {
-  description = "Client ID of the Container Apps managed identity"
-  value       = azurerm_user_assigned_identity.container_apps.client_id
-}
-
-output "functions_identity_client_id" {
   description = "Client ID of the Functions managed identity"
   value       = azurerm_user_assigned_identity.functions.client_id
 }
+
+output "managed_identity_principal_id" {
+  description = "Principal ID of the Functions managed identity"
+  value       = azurerm_user_assigned_identity.functions.principal_id

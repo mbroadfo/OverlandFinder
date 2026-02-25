@@ -5,14 +5,16 @@ This directory contains Terraform configuration to provision all Azure resources
 ## 🏗️ Resources Created
 
 - **Resource Group** - Container for all Azure resources
-- **Key Vault** - Stores secrets (MongoDB URI, SMTP credentials, Foundry API keys)
+- **Key Vault** - Stores secrets (MongoDB URI, Foundry API keys) - manually populated
 - **Storage Account** - Blob storage for vehicle images and logs
-- **Container Registry** - Stores Docker images
-- **Container Apps Environment** - Hosts container apps jobs
-- **Container Apps Job (Scraper)** - Runs every 4 hours to scrape and evaluate deals
+- **Function App** - Hosts all 4 Azure Functions (Consumption plan - FREE tier):
+  - `CraigslistScraper` - Timer trigger (every 4 hours)
+  - `FacebookScraper` - Timer trigger (every 4 hours + 15 min offset)
+  - `DealEvaluator` - Timer trigger (every 15 minutes)
+  - `DailySMSDigest` - Timer trigger (daily @ 8 AM)
 - **Application Insights** - Telemetry and monitoring
-- **Function App** - Daily SMS notifications (Consumption plan - FREE)
-- **Managed Identities** - Passwordless authentication for all services
+- **Log Analytics Workspace** - Centralized logging
+- **Managed Identity** - Passwordless authentication for Function App
 
 ## 📋 Prerequisites
 
@@ -146,13 +148,17 @@ Run `terraform plan` and check the Azure Pricing Calculator for accurate estimat
 
 **Expected monthly costs:**
 - Key Vault: FREE (under 10k ops/month)
-- Storage Account: ~$0.10 (minimal usage)
-- Container Registry (Basic): ~$5
-- Container Apps Job: ~$2-3 (scraper running every 4h)
-- Function App: FREE (Consumption plan, under 1M executions)
+- Storage Account: ~$0.10 (minimal usage for vehicle images & function storage)
+- Function App: FREE (Consumption plan, under 1M executions/month)
 - Application Insights: FREE (first 5GB/month)
+- Log Analytics: FREE (first 5GB/month)
 
-**Total: ~$7-8/month**
+**Total: ~$0.10/month (essentially FREE!)**
+
+**Comparison to Container Apps:**
+- Container Registry (Basic): ~~$5~~ **REMOVED**
+- Container Apps Job: ~~$2-3~~ **REMOVED**
+- **Savings: ~$7/month = $84/year**
 
 ## 🔐 Security Best Practices
 

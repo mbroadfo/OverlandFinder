@@ -32,34 +32,7 @@ variable "tags" {
   }
 }
 
-# Container Apps Configuration
-variable "scraper_schedule" {
-  description = "Cron schedule for scraper job (every 4 hours by default)"
-  type        = string
-  default     = "0 */4 * * *"
-}
 
-variable "sms_schedule" {
-  description = "Cron schedule for daily SMS (8 AM by default)"
-  type        = string
-  default     = "0 8 * * *"
-}
-
-variable "scraper_cpu" {
-  description = "CPU allocation for scraper job"
-  type        = number
-  default     = 0.5
-}
-
-variable "scraper_memory" {
-  description = "Memory allocation for scraper job (in GB)"
-  type        = string
-  default     = "1Gi"
-}
-
-# SMS Configuration
-variable "sms_recipient" {
-  description = "SMS recipient (Verizon email gateway format)"
   type        = string
   default     = "7208399656@vtext.com"
 }

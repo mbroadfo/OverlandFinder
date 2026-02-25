@@ -15,16 +15,6 @@ location     = "eastus"
 # SMS recipient (Verizon email-to-SMS gateway)
 sms_recipient = "7208399656@vtext.com"
 
-# Scraper schedule (every 4 hours)
-scraper_schedule = "0 */4 * * *"
-
-# Daily SMS schedule (8 AM MST)
-sms_schedule = "0 8 * * *"
-
-# Resource sizing
-scraper_cpu    = 0.5
-scraper_memory = "1Gi"
-
 # Tags
 tags = {
   Project     = "OverlandFinder"
