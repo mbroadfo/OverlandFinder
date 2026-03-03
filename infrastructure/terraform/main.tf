@@ -1,5 +1,8 @@
 # OverlandFinder Infrastructure - Main Configuration
 
+# NOTE: This infrastructure is a draft. Update after local development is complete.
+# Last sync: [date] - Reflects initial architecture design
+
 # Resource Group
 resource "azurerm_resource_group" "main" {
   name     = "rg-${var.project_name}-${var.environment}"

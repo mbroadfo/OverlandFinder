@@ -13,7 +13,7 @@ location     = "eastus"
 # az keyvault secret set --vault-name kv-overland-finder-dev --name "foundry-model" --value "gpt-4o"
 
 # SMS recipient (Verizon email-to-SMS gateway)
-sms_recipient = "7208399656@vtext.com"
+sms_recipient = "YOUR_NUMBER@vtext.com"  # Replace with your 10-digit Verizon number
 
 # Tags
 tags = {

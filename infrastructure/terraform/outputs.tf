@@ -50,3 +50,4 @@ output "managed_identity_client_id" {
 output "managed_identity_principal_id" {
   description = "Principal ID of the Functions managed identity"
   value       = azurerm_user_assigned_identity.functions.principal_id
+}

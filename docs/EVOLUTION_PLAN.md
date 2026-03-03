@@ -601,7 +601,7 @@
        
        # 3. Send SMS via email-to-SMS gateway (NO authentication required!)
        msg = MIMEText(message)
-       msg['To'] = "7208399656@vtext.com"  # Verizon email-to-SMS gateway
+       msg['To'] = os.getenv("SMS_RECIPIENT")  # Verizon email-to-SMS gateway
        msg['From'] = "noreply@overlandfinder.com"
        
        # Verizon gateway accepts emails from any sender - no SMTP auth needed

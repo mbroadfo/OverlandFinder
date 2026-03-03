@@ -32,7 +32,9 @@ variable "tags" {
   }
 }
 
-
+# SMS Configuration
+variable "sms_recipient" {
+  description = "SMS recipient (Verizon email gateway format: NUMBER@vtext.com)"
   type        = string
-  default     = "7208399656@vtext.com"
+  # No default - must be provided in terraform.tfvars
 }

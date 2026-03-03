@@ -1,9 +1,13 @@
-# Agent Framework - pinned versions for stability
-agent-framework-azure-ai==1.0.0b260107
-agent-framework-core==1.0.0b260107
-azure-ai-agentserver-core==1.0.0b10
-azure-ai-agentserver-agentframework==1.0.0b10
+# Azure Functions runtime
+azure-functions>=1.20.0
 azure-identity>=1.25.1
+
+# MongoDB for batch state management
+pymongo>=4.10.1
+
+# Azure services
+azure-keyvault-secrets>=4.9.0
+azure-storage-blob>=12.24.0
 
 # Web scraping and data extraction
 beautifulsoup4==4.12.3
@@ -11,17 +15,20 @@ requests==2.31.0
 selenium==4.27.1
 webdriver-manager==4.0.2
 
+# AI/LLM (for deal evaluation)
+azure-ai-inference>=1.0.0b8
+openai>=1.59.5
+
 # Data processing
 pandas==2.2.3
 python-dotenv>=1.2.1
 
-# Scheduling for periodic monitoring
-schedule==1.2.2
-APScheduler==3.10.4
+# VIN decoding
+requests-cache>=1.2.0
 
 # Debugging
 debugpy==1.8.11
-agent-dev-cli>=0.0.1b260205
 
-# Optional: Email notifications
-# smtplib is built-in
+# Local development/testing
+pytest>=8.3.4
+pytest-asyncio>=0.25.2

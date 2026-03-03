@@ -11,7 +11,7 @@ Azure Function (Timer Trigger: Daily @ 8AM)
     ↓
 Query MongoDB Atlas (top 3 deals, last 24h)
     ↓
-Send email to: 7208399656@vtext.com
+Send email to: YOUR_NUMBER@vtext.com (your configured number)
     ↓
 Verizon converts email → SMS (FREE)
 ```
@@ -26,7 +26,7 @@ Check `infrastructure/terraform/terraform.tfvars`:
 
 ```hcl
 # SMS Recipient (Verizon email-to-SMS gateway)
-sms_recipient = "7208399656@vtext.com"
+sms_recipient = "YOUR_NUMBER@vtext.com"  # Replace with your 10-digit number
 ```
 
 ### 2. Deploy Azure Function
@@ -91,12 +91,12 @@ import smtplib
 from email.mime.text import MIMEText
 
 msg = MIMEText("Test from OverlandFinder!")
-msg['To'] = "7208399656@vtext.com"
+msg['To'] = "YOUR_NUMBER@vtext.com"  # Replace with your number
 msg['From'] = "test@overlandfinder.com"
 
 with smtplib.SMTP("smtp.gmail.com", 587) as server:
     server.starttls()
-    server.sendmail("test@overlandfinder.com", "7208399656@vtext.com", msg.as_string())
+    server.sendmail("test@overlandfinder.com", "YOUR_NUMBER@vtext.com", msg.as_string())
 ```
 
 **Note:** No authentication required for Verizon email-to-SMS gateway!
@@ -125,7 +125,7 @@ traces
 ## Troubleshooting
 
 ### "SMS not received"
-- Check Verizon number is correct: `7208399656@vtext.com`
+- Check your number format is correct: `NUMBER@vtext.com`
 - Verify Azure Function executed: Check Application Insights logs
 - Check phone has cellular service
 - Try other gateways:
@@ -170,7 +170,7 @@ To change your carrier, update `terraform.tfvars` and re-run `terraform apply`.
 3. **Gets MongoDB URI** from Key Vault
 4. **Queries MongoDB** for top 3 deals (last 24h, score ≥65)
 5. **Formats SMS message** (<140 characters)
-6. **Sends email** to `7208399656@vtext.com` (no auth required)
+6. **Sends email** to configured SMS gateway (no auth required)
 7. **Verizon gateway** converts email → SMS and delivers
 8. **Logs execution** to Application Insights
 

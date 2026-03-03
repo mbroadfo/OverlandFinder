@@ -18,7 +18,7 @@ class SMSNotifier:
     """Send SMS notifications via Verizon email-to-SMS gateway"""
     
     def __init__(self):
-        self.recipient = os.getenv("SMS_RECIPIENT", "7208399656@vtext.com")
+        self.recipient = os.getenv("SMS_RECIPIENT")
         self.smtp_server = os.getenv("SMTP_SERVER", "smtp.gmail.com")
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_username = os.getenv("SMTP_USERNAME", "")
