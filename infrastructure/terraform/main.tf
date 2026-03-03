@@ -28,18 +28,6 @@ resource "azurerm_storage_account" "main" {
   tags = var.tags
 }
 
-resource "azurerm_storage_container" "vehicle_images" {
-  name                  = "vehicle-images"
-  storage_account_name  = azurerm_storage_account.main.name
-  container_access_type = "private"
-}
-
-resource "azurerm_storage_container" "logs" {
-  name                  = "logs"
-  storage_account_name  = azurerm_storage_account.main.name
-  container_access_type = "private"
-}
-
 # Application Insights (Monitoring)
 resource "azurerm_log_analytics_workspace" "main" {
   name                = "log-${var.project_name}-${var.environment}"
@@ -87,12 +75,12 @@ resource "azurerm_key_vault_access_policy" "terraform" {
 }
 
 # Secrets Management:
-# Terraform does NOT create any secrets in Key Vault
-# All secrets must be manually added after deployment via Azure CLI:
+# Terraform does NOT create any secrets in Key Vault.
+# Add these manually after deployment:
 #
-# az keyvault secret set --vault-name kv-overland-finder-dev --name "mongodb-uri" --value "mongodb+srv://..."
-# az keyvault secret set --vault-name kv-overland-finder-dev --name "foundry-endpoint" --value "https://..."
-# az keyvault secret set --vault-name kv-overland-finder-dev --name "foundry-model" --value "gpt-4o"
+# az keyvault secret set --vault-name kv-overland-finder-dev --name "mongodb-uri"     --value "mongodb+srv://..."
+# az keyvault secret set --vault-name kv-overland-finder-dev --name "smtp-username"   --value "you@gmail.com"
+# az keyvault secret set --vault-name kv-overland-finder-dev --name "smtp-password"   --value "xxxx-xxxx-xxxx-xxxx"
 
 # Managed Identity for Azure Functions
 resource "azurerm_user_assigned_identity" "functions" {
@@ -111,13 +99,6 @@ resource "azurerm_key_vault_access_policy" "functions" {
   secret_permissions = [
     "Get", "List"
   ]
-}
-
-# Grant Functions Identity access to Blob Storage
-resource "azurerm_role_assignment" "functions_storage" {
-  scope                = azurerm_storage_account.main.id
-  role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = azurerm_user_assigned_identity.functions.principal_id
 }
 
 # Azure Function App Service Plan (Consumption - FREE tier)
@@ -150,14 +131,26 @@ resource "azurerm_linux_function_app" "main" {
   }
   
   app_settings = {
-    "KEY_VAULT_URL"                   = azurerm_key_vault.main.vault_uri
-    "AZURE_CLIENT_ID"                 = azurerm_user_assigned_identity.functions.client_id
-    "SMS_RECIPIENT"                   = var.sms_recipient
-    "STORAGE_ACCOUNT_NAME"            = azurerm_storage_account.main.name
+    # Runtime configuration
     "FUNCTIONS_WORKER_RUNTIME"        = "python"
     "AzureWebJobsFeatureFlags"        = "EnableWorkerIndexing"
     "ENABLE_ORYX_BUILD"               = "true"
     "SCM_DO_BUILD_DURING_DEPLOYMENT"  = "true"
+
+    # Managed Identity — tells DefaultAzureCredential which identity to use
+    "AZURE_CLIENT_ID"                 = azurerm_user_assigned_identity.functions.client_id
+
+    # Key Vault URL (code can use this to build references if needed)
+    "KEY_VAULT_URL"                   = azurerm_key_vault.main.vault_uri
+
+    # Static app settings
+    "SMS_RECIPIENT"                   = var.sms_recipient
+
+    # Key Vault references — values resolved at runtime by the Functions host
+    # Secrets must be created manually: az keyvault secret set --vault-name ... --name ... --value ...
+    "MONGODB_URI"     = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=mongodb-uri;ClientId=${azurerm_user_assigned_identity.functions.client_id})"
+    "SMTP_USERNAME"   = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=smtp-username;ClientId=${azurerm_user_assigned_identity.functions.client_id})"
+    "SMTP_PASSWORD"   = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=smtp-password;ClientId=${azurerm_user_assigned_identity.functions.client_id})"
   }
   
   identity {
@@ -166,6 +159,6 @@ resource "azurerm_linux_function_app" "main" {
   }
   
   tags = merge(var.tags, {
-    "Functions" = "CraigslistScraper,FacebookScraper,DealEvaluator,DailySMSDigest"
+    "Functions" = "scraper_job,daily_sms_digest"
   })
 }

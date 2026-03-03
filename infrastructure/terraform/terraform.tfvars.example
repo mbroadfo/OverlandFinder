@@ -5,12 +5,12 @@ project_name = "overland-finder"
 environment  = "dev"
 location     = "eastus"
 
-# Note: MongoDB URI should be manually added to Key Vault after Terraform deployment
-# Do NOT put the MongoDB connection string in this file
+# Note: All secrets are manually added to Key Vault after Terraform deployment.
+# Do NOT put secrets in this file — it is committed to git.
 # After running 'terraform apply', run:
-# az keyvault secret set --vault-name kv-overland-finder-dev --name "mongodb-uri" --value "mongodb+srv://..."
-# az keyvault secret set --vault-name kv-overland-finder-dev --name "foundry-endpoint" --value "https://..."
-# az keyvault secret set --vault-name kv-overland-finder-dev --name "foundry-model" --value "gpt-4o"
+#   az keyvault secret set --vault-name kv-overland-finder-dev --name "mongodb-uri"   --value "mongodb+srv://..."
+#   az keyvault secret set --vault-name kv-overland-finder-dev --name "smtp-username" --value "you@gmail.com"
+#   az keyvault secret set --vault-name kv-overland-finder-dev --name "smtp-password" --value "xxxx-xxxx-xxxx-xxxx"
 
 # SMS recipient (Verizon email-to-SMS gateway)
 sms_recipient = "YOUR_NUMBER@vtext.com"  # Replace with your 10-digit Verizon number

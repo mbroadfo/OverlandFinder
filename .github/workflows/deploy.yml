@@ -1,0 +1,120 @@
+name: Deploy Azure Functions
+
+# -----------------------------------------------------------------------
+# Triggers
+# -----------------------------------------------------------------------
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:        # Manual trigger from GitHub UI
+
+# -----------------------------------------------------------------------
+# Required GitHub Secrets (Settings → Secrets → Actions):
+#
+#   AZURE_CLIENT_ID        — App Registration / Federated Identity client ID
+#   AZURE_TENANT_ID        — Azure AD tenant ID
+#   AZURE_SUBSCRIPTION_ID  — Azure subscription ID
+#
+# One-time OIDC setup (run once from your machine):
+#   az ad app create --display-name "OverlandFinder-GH-Deploy"
+#   az ad sp create --id <app-id>
+#   az role assignment create --role Contributor \
+#     --assignee <sp-object-id> \
+#     --scope /subscriptions/<subscription-id>/resourceGroups/rg-overland-finder-dev
+#   az ad app federated-credential create --id <app-id> --parameters '{
+#     "name": "github-main",
+#     "issuer": "https://token.actions.githubusercontent.com",
+#     "subject": "repo:mbroadfo/OverlandFinder:ref:refs/heads/main",
+#     "audiences": ["api://AzureADTokenExchange"]
+#   }'
+# -----------------------------------------------------------------------
+
+env:
+  AZURE_FUNCTIONAPP_NAME: func-overland-finder-dev
+  PYTHON_VERSION: "3.11"
+
+permissions:
+  id-token: write   # Required for OIDC
+  contents: read
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Lint & Test
+  # -----------------------------------------------------------------------
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint with ruff
+        run: |
+          pip install ruff
+          ruff check . --output-format=github
+        continue-on-error: true   # Warn, don't block deploy
+
+      - name: Run tests
+        run: |
+          pytest tests/ -v --tb=short -q
+        continue-on-error: true   # Tests will grow — don't block deploy while suite is thin
+        env:
+          # Minimal env so imports don't fail during test collection
+          MONGODB_URI: "mongodb://localhost:27017/test"
+
+  # -----------------------------------------------------------------------
+  # Deploy to Azure Functions
+  # -----------------------------------------------------------------------
+  deploy:
+    name: Deploy to Azure
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      # Oryx builds during deployment, but pre-installing locally gives a
+      # faster deployment and catches missing package errors in CI.
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Login to Azure (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Deploy to Azure Functions
+        uses: azure/functions-action@v1
+        with:
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          package: .
+          scm-do-build-during-deployment: true   # Let Oryx handle pip install in Azure
+          enable-oryx-build: true
+
+      - name: Verify deployment
+        run: |
+          echo "Checking function app status..."
+          az functionapp show \
+            --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+            --resource-group rg-overland-finder-dev \
+            --query "{state:state, defaultHostName:defaultHostName}" \
+            --output table

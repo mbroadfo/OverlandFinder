@@ -35,37 +35,36 @@ Build an intelligent agent that monitors online vehicle marketplaces 24/7, evalu
 │                  Azure Subscription                      │
 │                                                          │
 │  ┌────────────────────────────────────────────────┐    │
-│  │  Container Apps Job (Scheduled every 4h)       │    │
+│  │  Azure Function: scraper_job (every 4h)        │    │
 │  │  ┌──────────────┐  ┌──────────────────┐       │    │
-│  │  │   Scrapers   │→ │  AI Evaluator    │       │    │
-│  │  │  (Phase 2-3) │  │  (GPT-4 + VIN)   │       │    │
+│  │  │   Craigslist │→ │  Deal Evaluator  │       │    │
+│  │  │   Scraper    │  │  (value scoring) │       │    │
 │  │  └──────────────┘  └──────────────────┘       │    │
 │  └────────────────────────────────────────────────┘    │
 │                          ↓                              │
 │  ┌────────────────────────────────────────────────┐    │
 │  │  MongoDB Atlas M0 (FREE)                       │    │
-│  │  • deals collection (scored opportunities)     │    │
-│  │  • scrape_history (deduplication)              │    │
-│  │  • favorites (user saves)                      │    │
+│  │  • raw_listings (pending evaluation)           │    │
+│  │  • deals (scored opportunities)                │    │
+│  │  • batch_checkpoints (resume state)            │    │
 │  └────────────────────────────────────────────────┘    │
 │                          ↓                              │
 │  ┌────────────────────────────────────────────────┐    │
-│  │  Azure Function (Timer: Daily 7AM)             │    │
+│  │  Azure Function: daily_sms_digest (8 AM daily) │    │
 │  │  ┌──────────────────────────────────┐          │    │
-│  │  │  SMS Notifier (Top 5 Deals)      │          │    │
+│  │  │  Top 3 deals → Gmail → Verizon   │          │    │
 │  │  └──────────────────────────────────┘          │    │
 │  └────────────────────────────────────────────────┘    │
 │                                                          │
-│  Supporting Services:                                   │
-│  • Azure Key Vault (secrets management)                 │
-│  • Storage Account (images, logs, backups)              │
-│  • Container Registry (Docker images)                   │
+│  Supporting Services (all free tier):                   │
+│  • Azure Key Vault (MongoDB URI, SMTP credentials)      │
+│  • Storage Account (Functions runtime state only)       │
 │  • Application Insights (telemetry)                     │
-│  • Managed Identities (passwordless auth)               │
+│  • Managed Identity (passwordless Key Vault access)     │
 └─────────────────────────────────────────────────────────┘
 ```
 
-**Cost Estimate**: ~$7-8/month (Container Apps ~$2-3, ACR ~$5, Storage ~$0.10, rest FREE)
+**Cost Estimate**: ~$0.02/month (Storage ~$0.02, everything else FREE tier)
 
 ## 🚀 Quick Start
 
@@ -91,10 +90,7 @@ az login
 cd infrastructure/terraform
 cp terraform.tfvars.example terraform.tfvars
 # Edit terraform.tfvars with your values:
-#   - mongodb_uri (from Atlas connection string)
-#   - smtp_username/password (for email provider)
-#   - foundry_endpoint/model (Azure AI Studio)
-#   - sms_recipient (your phone number)
+#   - sms_recipient (your Verizon number@vtext.com)
 
 # Deploy infrastructure
 terraform init

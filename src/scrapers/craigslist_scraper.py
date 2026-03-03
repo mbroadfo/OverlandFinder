@@ -9,6 +9,8 @@ import logging
 from datetime import datetime
 from typing import Optional
 
+import urllib.parse
+
 import requests
 from bs4 import BeautifulSoup
 
@@ -160,7 +162,7 @@ class CraigslistScraper(BaseScraper):
         """Fetch one search results page and return a list of raw listing dicts."""
         url = (
             f"https://{region}.craigslist.org/search/cto"
-            f"?query={requests.utils.quote(query)}"
+            f"?query={urllib.parse.quote(query)}"
             f"&min_price={min_price}"
             f"&max_price={max_price}"
             f"&s={offset}"

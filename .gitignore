@@ -29,6 +29,9 @@ env/
 # Environment variables
 .env
 
+# Azure Functions local settings (contains connection strings — never commit)
+local.settings.json
+
 # IDE
 .idea/
 *.swp
