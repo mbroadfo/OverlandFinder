@@ -1,13 +1,16 @@
 """
 Deal Evaluator — Batch Processor with MongoDB Checkpoint Pattern
 
-Fetches pending listings from raw_listings, enriches them with detail page
-data (mileage, description), scores them, and writes deals to MongoDB.
+Reads pending listings from raw_listings, enriches them with detail page
+data, scores them with Claude (Haiku), and writes deals to MongoDB.
+Also records price_observations to build market knowledge over time.
 """
+import json
 import re
 import time
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 import requests
@@ -17,8 +20,7 @@ from pymongo.database import Database
 from dotenv import load_dotenv
 import os
 
-from src.evaluator.value_evaluator import ValueEvaluator, VehicleListing, DealEvaluation
-from src.data.vehicle_database import get_vehicle_profile
+from src.evaluator.claude_evaluator import ClaudeEvaluator
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -27,10 +29,9 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-BATCH_SIZE          = 20    # Listings to evaluate per run (stay under 10 min)
-MIN_SCORE_TO_SAVE   = 30    # Skip saving obvious junk deals
-REQUEST_DELAY       = 1.5   # Seconds between detail-page fetches
-MAX_BUDGET          = 30_000
+BATCH_SIZE        = 20    # Listings to evaluate per run (stay under 10 min)
+MIN_SCORE_TO_SAVE = 30    # Skip saving obvious junk deals
+REQUEST_DELAY     = 1.5   # Seconds between detail-page fetches
 
 HEADERS = {
     "User-Agent": (
@@ -40,7 +41,6 @@ HEADERS = {
     )
 }
 
-# Mileage patterns in listing body text
 MILEAGE_RE = re.compile(
     r"(?:odometer|mileage|miles?)[:\s]*([0-9]{1,3}(?:,?[0-9]{3})*)\s*(?:mi|miles?)?",
     re.IGNORECASE,
@@ -49,19 +49,19 @@ MILEAGE_RE = re.compile(
 
 class DealEvaluator:
     """
-    Reads pending raw_listings, enriches + scores them, writes to deals.
-    Uses status field on raw_listing as natural resumption checkpoint — 
-    never re-processes listings that are already 'evaluated' or 'error'.
+    Reads pending raw_listings, enriches + scores them with Claude, writes to deals.
+    Uses status field on raw_listing as natural resumption checkpoint.
     """
 
     def __init__(self):
         self.db: Database = self._connect_db()
-        self.evaluator = ValueEvaluator(max_budget=MAX_BUDGET)
+        self.evaluator = ClaudeEvaluator()
         self.session = requests.Session()
         self.session.headers.update(HEADERS)
+        self._wish_list_map = self._load_wish_list()
 
     # ------------------------------------------------------------------
-    # DB connection
+    # Initialization helpers
     # ------------------------------------------------------------------
 
     def _connect_db(self) -> Database:
@@ -72,6 +72,18 @@ class DealEvaluator:
         client.admin.command("ping")
         logger.info("[evaluator] Connected to MongoDB Atlas")
         return client["overland_finder"]
+
+    def _load_wish_list(self) -> dict:
+        """Load wish_list.json and index by item name for fast lookup."""
+        wish_list_path = Path(__file__).parent.parent.parent / "wish_list.json"
+        try:
+            with open(wish_list_path, encoding="utf-8") as f:
+                items = json.load(f)
+            logger.info(f"[evaluator] Loaded {len(items)} items from wish_list.json")
+            return {item["name"]: item for item in items}
+        except Exception as e:
+            logger.warning(f"[evaluator] Could not load wish_list.json: {e}")
+            return {}
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -109,47 +121,51 @@ class DealEvaluator:
                     {"$set": {"status": "processing"}}
                 )
 
-                # Enrich with detail page (best-effort)
-                enriched = self._enrich_from_detail(raw)
-
-                # Build VehicleListing for the evaluator
-                listing_obj = self._to_vehicle_listing(enriched)
-
-                if listing_obj is None:
-                    # Can't map to a known platform — mark and skip
+                # Skip if no price
+                if not raw.get("price"):
                     self.db.raw_listings.update_one(
                         {"_id": listing_id},
-                        {"$set": {"status": "skipped", "skip_reason": "unknown_platform"}}
+                        {"$set": {"status": "skipped", "skip_reason": "no_price"}}
                     )
                     continue
 
-                # Run scoring
-                evaluation: DealEvaluation = self.evaluator.evaluate_listing(listing_obj)
+                # Enrich with detail page (best-effort)
+                enriched = self._enrich_from_detail(raw)
+
+                # Look up wish_list context
+                wish_list_name = raw.get("wish_list_name") or raw.get("search_query", "")
+                item = self._wish_list_map.get(wish_list_name, {})
+                evaluation_notes = item.get("evaluation_notes", "")
+
+                # Score with Claude
+                evaluation = self.evaluator.evaluate(enriched, wish_list_name, evaluation_notes)
                 evaluated += 1
 
-                # Only persist worthwhile deals
-                if evaluation.value_score >= MIN_SCORE_TO_SAVE:
-                    self._save_deal(raw, enriched, evaluation)
+                # Record price observation for market knowledge
+                self._record_price_observation(enriched, wish_list_name, evaluation)
+
+                score = evaluation.get("value_score", 0)
+                action = evaluation.get("recommended_action", "PASS")
+
+                if score >= MIN_SCORE_TO_SAVE:
+                    self._save_deal(raw, enriched, evaluation, wish_list_name)
                     deals_saved += 1
                     logger.info(
-                        f"[evaluator] 💾 Deal saved: '{enriched.get('title')}' "
-                        f"${enriched.get('price'):,} | score={evaluation.value_score:.1f} "
-                        f"| {evaluation.recommended_action}"
+                        f"[evaluator] Deal saved: '{enriched.get('title')}' "
+                        f"${enriched.get('price', 0):,} | score={score:.1f} | {action}"
                     )
                 else:
                     logger.debug(
-                        f"[evaluator] Skipped low-score listing: "
-                        f"'{enriched.get('title')}' score={evaluation.value_score:.1f}"
+                        f"[evaluator] Skipped low-score: '{enriched.get('title')}' score={score:.1f}"
                     )
 
-                # Mark as evaluated
                 self.db.raw_listings.update_one(
                     {"_id": listing_id},
                     {"$set": {
                         "status": "evaluated",
                         "evaluated_at": datetime.now(timezone.utc),
-                        "value_score": evaluation.value_score,
-                        "recommended_action": evaluation.recommended_action,
+                        "value_score": score,
+                        "recommended_action": action,
                     }}
                 )
 
@@ -192,7 +208,6 @@ class DealEvaluator:
             # Description
             body_el = soup.select_one("#postingbody") or soup.select_one(".body")
             if body_el:
-                # Remove the "QR code" notice if present
                 for tag in body_el.select(".print-qrcode-container"):
                     tag.decompose()
                 enriched["description"] = body_el.get_text(" ", strip=True)
@@ -207,9 +222,9 @@ class DealEvaluator:
 
             # Condition, title status from attribute groups
             attrs = self._extract_attr_groups(soup)
-            enriched["condition"]     = attrs.get("condition")
-            enriched["title_status"]  = attrs.get("title status")
-            enriched["odometer"]      = attrs.get("odometer")
+            enriched["condition"]    = attrs.get("condition")
+            enriched["title_status"] = attrs.get("title status")
+            enriched["odometer"]     = attrs.get("odometer")
 
             # More-accurate price from detail page
             price_el = soup.select_one("span.price") or soup.select_one(".price")
@@ -228,7 +243,6 @@ class DealEvaluator:
 
     @staticmethod
     def _extract_attr_groups(soup) -> dict:
-        """Extract key-value pairs from Craigslist attribute spans."""
         attrs = {}
         for group in soup.select(".attrgroup"):
             for span in group.select("span"):
@@ -237,13 +251,11 @@ class DealEvaluator:
                     k, _, v = text.partition(":")
                     attrs[k.strip()] = v.strip()
                 elif text:
-                    # Single-word attributes like "4wd"
                     attrs[text] = True
         return attrs
 
     @staticmethod
     def _extract_mileage_from_attrs(soup) -> Optional[int]:
-        """Look for odometer reading in Craigslist attribute groups."""
         for span in soup.select(".attrgroup span"):
             text = span.get_text(" ", strip=True).lower()
             if "odometer" in text or "mileage" in text:
@@ -254,7 +266,6 @@ class DealEvaluator:
 
     @staticmethod
     def _extract_mileage_from_text(text: str) -> Optional[int]:
-        """Extract mileage from free-text description."""
         m = MILEAGE_RE.search(text)
         if m:
             return int(m.group(1).replace(",", ""))
@@ -266,127 +277,72 @@ class DealEvaluator:
         return int(digits) if digits else None
 
     # ------------------------------------------------------------------
-    # VehicleListing construction
-    # ------------------------------------------------------------------
-
-    def _to_vehicle_listing(self, enriched: dict) -> Optional[VehicleListing]:
-        """
-        Map an enriched raw listing dict → VehicleListing dataclass.
-        Returns None if we can't identify the vehicle platform.
-        """
-        title    = enriched.get("title", "")
-        price    = enriched.get("price") or 0
-        year     = enriched.get("year")
-        location = enriched.get("location", "")
-        desc     = enriched.get("description", "")
-        mileage  = enriched.get("mileage") or 150_000  # default if unknown
-        url      = enriched.get("url", "")
-
-        if not year or not price:
-            return None
-
-        # Parse make/model from title and search query
-        make, model = self._infer_make_model(title, enriched.get("search_query", ""))
-        if not make or not model:
-            return None
-
-        # Confirm vehicle is in our database
-        profile = get_vehicle_profile(make, model, year)
-        if not profile:
-            # Try with nearby years (+/- 2)
-            for dy in [1, -1, 2, -2]:
-                profile = get_vehicle_profile(make, model, year + dy)
-                if profile:
-                    break
-        if not profile:
-            return None
-
-        return VehicleListing(
-            url=url,
-            title=title,
-            make=make,
-            model=model,
-            year=year,
-            price=price,
-            mileage=mileage,
-            location=location,
-            description=desc,
-            title_status=enriched.get("title_status"),
-        )
-
-    @staticmethod
-    def _infer_make_model(title: str, search_query: str) -> tuple[str, str]:
-        """
-        Infer make + model from the listing title ONLY.
-        The search query is intentionally NOT used — a Craigslist search for
-        'wrangler' can return unrelated listings (e.g. Honda Pilot), and
-        classifying those by search term causes false positives.
-        Returns ("", "") if no confident match.
-        """
-        title_lower = title.lower()
-
-        MAPPINGS = [
-            ("toyota",    "4runner",      ["4runner", "4-runner"]),
-            ("toyota",    "tacoma",       ["tacoma"]),
-            ("toyota",    "fj cruiser",   ["fj cruiser", "fjcruiser"]),
-            ("toyota",    "land cruiser", ["land cruiser", "landcruiser"]),
-            ("lexus",     "gx470",        ["gx470", "gx 470"]),
-            ("lexus",     "gx460",        ["gx460", "gx 460"]),
-            ("jeep",      "wrangler",     ["wrangler"]),
-            ("jeep",      "cherokee",     ["cherokee xj", "cherokee kj", "grand cherokee"]),
-            ("nissan",    "xterra",       ["xterra"]),
-            ("nissan",    "frontier",     ["frontier"]),
-            ("ford",      "bronco",       ["bronco"]),
-            ("chevrolet", "colorado",     ["colorado zr2", "colorado z71"]),
-        ]
-
-        for make, model, keywords in MAPPINGS:
-            if any(kw in title_lower for kw in keywords):
-                return make.capitalize(), model.title()
-
-        return "", ""
-
-    # ------------------------------------------------------------------
     # Deal persistence
     # ------------------------------------------------------------------
 
-    def _save_deal(self, raw: dict, enriched: dict, evaluation: DealEvaluation) -> None:
+    def _save_deal(self, raw: dict, enriched: dict, evaluation: dict, wish_list_name: str) -> None:
         """Upsert deal into the deals collection."""
-        listing = evaluation.listing
+        price = enriched.get("price", 0) or 0
+        market_val = evaluation.get("estimated_market_value", 0) or 0
+        discount = ((market_val - price) / market_val * 100) if market_val > 0 and price > 0 else 0
+
+        # Derive make/model from wish_list_name for SMS digest compatibility
+        parts = wish_list_name.split(" ", 1) if wish_list_name else []
+        make = parts[0] if parts else ""
+        model = parts[1] if len(parts) > 1 else wish_list_name
+
         self.db.deals.update_one(
-            {"url": listing.url},
+            {"url": enriched.get("url", "")},
             {"$set": {
-                "url":               listing.url,
-                "title":             listing.title,
-                "make":              listing.make,
-                "model":             listing.model,
-                "year":              listing.year,
-                "price":             listing.price,
-                "mileage":           listing.mileage,
-                "location":          listing.location,
-                "description":       listing.description[:2000] if listing.description else "",
-                "title_status":      listing.title_status,
+                "url":                enriched.get("url", ""),
+                "title":              enriched.get("title", ""),
+                "make":               make,
+                "model":              model,
+                "wish_list_name":     wish_list_name,
+                "year":               enriched.get("year"),
+                "price":              price,
+                "mileage":            enriched.get("mileage"),
+                "location":           enriched.get("location", ""),
+                "description":        (enriched.get("description") or "")[:2000],
+                "title_status":       enriched.get("title_status"),
 
-                "value_score":       evaluation.value_score,
-                "recommended_action":evaluation.recommended_action,
-                "market_value_est":  evaluation.market_value_estimate,
-                "discount_percent":  evaluation.discount_percent,
-                "platform_score":    evaluation.platform_score,
-                "pros":              evaluation.pros,
-                "cons":              evaluation.cons,
-                "red_flags":         evaluation.red_flags,
-                "analysis":          evaluation.analysis,
-                "upgrade_costs":     evaluation.estimated_upgrade_costs,
+                "value_score":        evaluation.get("value_score", 0),
+                "recommended_action": evaluation.get("recommended_action", "PASS"),
+                "market_value_est":   market_val,
+                "discount_percent":   discount,
+                "pros":               evaluation.get("pros", []),
+                "cons":               evaluation.get("cons", []),
+                "red_flags":          evaluation.get("red_flags", []),
+                "analysis":           evaluation.get("analysis", ""),
 
-                "region":            raw.get("region"),
-                "search_query":      raw.get("search_query"),
-                "source":            raw.get("source", "craigslist_scraper"),
-                "scraped_at":        raw.get("scraped_at"),
-                "evaluated_at":      datetime.now(timezone.utc),
-                "notified":          False,
+                "region":             raw.get("region"),
+                "search_query":       raw.get("search_query"),
+                "source":             raw.get("source", "craigslist_scraper"),
+                "scraped_at":         raw.get("scraped_at"),
+                "evaluated_at":       datetime.now(timezone.utc),
+                "notified":           False,
             }},
             upsert=True,
         )
+
+    def _record_price_observation(self, enriched: dict, wish_list_name: str, evaluation: dict) -> None:
+        """Record price data point for building market knowledge over time."""
+        price = enriched.get("price")
+        market_est = evaluation.get("estimated_market_value")
+        if not price or not market_est:
+            return
+
+        self.db.price_observations.insert_one({
+            "wish_list_name":    wish_list_name,
+            "title":             enriched.get("title", ""),
+            "price":             price,
+            "year":              enriched.get("year"),
+            "mileage":           enriched.get("mileage"),
+            "location":          enriched.get("location", ""),
+            "claude_market_est": market_est,
+            "value_score":       evaluation.get("value_score"),
+            "observed_at":       datetime.now(timezone.utc),
+        })
 
 
 # ---------------------------------------------------------------------------
@@ -401,4 +357,4 @@ if __name__ == "__main__":
     )
     evaluator = DealEvaluator()
     result = evaluator.run()
-    print(f"\n✅ Finished: {result}")
+    print(f"\nFinished: {result}")

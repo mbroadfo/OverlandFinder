@@ -6,6 +6,7 @@
     "MONGODB_URI": "mongodb+srv://mbroadfo_db_user:<PASSWORD>@overland-finder-cluster.tfehxpn.mongodb.net/?appName=overland-finder-cluster",
     "SMTP_USERNAME": "your-gmail@gmail.com",
     "SMTP_PASSWORD": "xxxx-xxxx-xxxx-xxxx",
-    "SMS_RECIPIENT": "7208399656@vtext.com"
+    "SMS_RECIPIENT": "7208399656@vtext.com",
+    "ANTHROPIC_API_KEY": "sk-ant-api03-..."
   }
 }

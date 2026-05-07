@@ -2,33 +2,22 @@
 azure-functions>=1.20.0
 azure-identity>=1.25.1
 
-# MongoDB for batch state management
+# MongoDB
 pymongo>=4.10.1
 
-# Azure services
-azure-keyvault-secrets>=4.9.0
-azure-storage-blob>=12.24.0
+# AI/LLM — deal evaluation
+anthropic>=0.45.0
 
-# Web scraping and data extraction
+# Web scraping
 beautifulsoup4==4.12.3
 requests==2.31.0
-selenium==4.27.1
-webdriver-manager==4.0.2
 
-# AI/LLM (for deal evaluation)
-azure-ai-inference>=1.0.0b8
-openai>=1.59.5
-
-# Data processing
-pandas==2.2.3
+# Config / environment
 python-dotenv>=1.2.1
 
-# VIN decoding
-requests-cache>=1.2.0
-
-# Debugging
+# Debugging (VS Code attach)
 debugpy==1.8.11
 
-# Local development/testing
+# Local development / testing
 pytest>=8.3.4
 pytest-asyncio>=0.25.2

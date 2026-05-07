@@ -3,10 +3,12 @@ Craigslist Scraper — Overlanding Vehicles (Denver / Colorado)
 Searches Craigslist cars+trucks by owner for target platforms,
 saves raw listings to MongoDB, and uses checkpoint pattern for resumability.
 """
+import json
 import re
 import time
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import urllib.parse
@@ -29,22 +31,19 @@ REGIONS = [
     "cosprings",
 ]
 
-# Each entry is a Craigslist query + price bounds.
-# Keep max_price generous — the evaluator will filter for actual deals.
-SEARCH_TERMS = [
-    {"query": "4runner",           "min_price": 4000,  "max_price": 48000},
-    {"query": "tacoma 4x4",        "min_price": 3000,  "max_price": 40000},
-    {"query": "fj cruiser",        "min_price": 8000,  "max_price": 45000},
-    {"query": "wrangler",          "min_price": 2000,  "max_price": 35000},
-    {"query": "land cruiser",      "min_price": 4000,  "max_price": 35000},
-    {"query": "gx470",             "min_price": 4000,  "max_price": 28000},
-    {"query": "gx460",             "min_price": 10000, "max_price": 55000},
-    {"query": "xterra pro-4x",     "min_price": 2000,  "max_price": 18000},
-    {"query": "jeep cherokee xj",  "min_price": 1000,  "max_price": 16000},
-    {"query": "jeep cherokee kj",  "min_price": 1000,  "max_price": 12000},
-    {"query": "bronco classic",    "min_price": 3000,  "max_price": 30000},
-    {"query": "colorado zr2",      "min_price": 10000, "max_price": 45000},
-]
+
+def _load_search_terms() -> list[dict]:
+    """Load search terms from wish_list.json at project root."""
+    wish_list_path = Path(__file__).parent.parent.parent / "wish_list.json"
+    try:
+        with open(wish_list_path, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning(f"[craigslist] Could not load wish_list.json: {e}")
+        return []
+
+
+SEARCH_TERMS = _load_search_terms()
 
 RESULTS_PER_PAGE = 120
 REQUEST_DELAY_SECONDS = 2.5  # Be polite to Craigslist servers
@@ -96,12 +95,13 @@ class CraigslistScraper(BaseScraper):
                 if r_idx == start_region and t_idx < start_term:
                     continue  # Already processed
 
+                name      = term_cfg["name"]
                 query     = term_cfg["query"]
                 min_price = term_cfg["min_price"]
                 max_price = term_cfg["max_price"]
 
                 logger.info(
-                    f"[craigslist] region={region} query='{query}' "
+                    f"[craigslist] region={region} item='{name}' query='{query}' "
                     f"${min_price}–${max_price}"
                 )
 
@@ -118,6 +118,7 @@ class CraigslistScraper(BaseScraper):
 
                     total_seen += len(listings)
                     for listing in listings:
+                        listing["wish_list_name"] = name
                         if self.upsert_listing(listing):
                             new_count += 1
 
@@ -128,11 +129,12 @@ class CraigslistScraper(BaseScraper):
 
                     # Save checkpoint after each page
                     self.save_checkpoint({
-                        "region_idx":  r_idx,
-                        "term_idx":    t_idx,
-                        "page_offset": offset + RESULTS_PER_PAGE,
-                        "region":      region,
-                        "search_term": query,
+                        "region_idx":     r_idx,
+                        "term_idx":       t_idx,
+                        "page_offset":    offset + RESULTS_PER_PAGE,
+                        "region":         region,
+                        "wish_list_name": name,
+                        "search_term":    query,
                     })
 
                     if len(listings) < RESULTS_PER_PAGE:
