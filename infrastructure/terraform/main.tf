@@ -169,8 +169,7 @@ resource "azurerm_linux_function_app" "main" {
     # Non-sensitive config (managed as GitHub Environment Variables → TF_VAR_*)
     "SMS_RECIPIENT" = var.sms_recipient
 
-    # Secrets resolved at runtime from Key Vault
-    # Values are pushed by GitHub Actions: az keyvault secret set --vault-name ... --name ... --value ...
+    # Secrets resolved at runtime from Key Vault (values managed by Terraform)
     "MONGODB_URI"       = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=mongodb-uri;ClientId=${azurerm_user_assigned_identity.functions.client_id})"
     "SMTP_USERNAME"     = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=smtp-username;ClientId=${azurerm_user_assigned_identity.functions.client_id})"
     "SMTP_PASSWORD"     = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.main.name};SecretName=smtp-password;ClientId=${azurerm_user_assigned_identity.functions.client_id})"
@@ -184,4 +183,36 @@ resource "azurerm_linux_function_app" "main" {
     azurerm_role_assignment.func_storage_queue,
     azurerm_role_assignment.func_storage_table,
   ]
+}
+
+# ── Key Vault Secrets ─────────────────────────────────────────────────────────
+# Values flow in as TF_VAR_* from GitHub Environment Secrets during terraform apply.
+# Marked sensitive so they never appear in plan/apply output.
+
+resource "azurerm_key_vault_secret" "mongodb_uri" {
+  name         = "mongodb-uri"
+  value        = var.mongodb_uri
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_key_vault_access_policy.terraform]
+}
+
+resource "azurerm_key_vault_secret" "smtp_username" {
+  name         = "smtp-username"
+  value        = var.smtp_username
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_key_vault_access_policy.terraform]
+}
+
+resource "azurerm_key_vault_secret" "smtp_password" {
+  name         = "smtp-password"
+  value        = var.smtp_password
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_key_vault_access_policy.terraform]
+}
+
+resource "azurerm_key_vault_secret" "anthropic_api_key" {
+  name         = "anthropic-api-key"
+  value        = var.anthropic_api_key
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_key_vault_access_policy.terraform]
 }

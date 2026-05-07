@@ -30,6 +30,30 @@ variable "github_actions_principal_id" {
   type        = string
 }
 
+variable "mongodb_uri" {
+  description = "MongoDB Atlas connection string"
+  type        = string
+  sensitive   = true
+}
+
+variable "smtp_username" {
+  description = "Gmail address for email-to-SMS"
+  type        = string
+  sensitive   = true
+}
+
+variable "smtp_password" {
+  description = "Gmail app password for email-to-SMS"
+  type        = string
+  sensitive   = true
+}
+
+variable "anthropic_api_key" {
+  description = "Anthropic API key for Claude evaluator"
+  type        = string
+  sensitive   = true
+}
+
 variable "tags" {
   description = "Common tags applied to all resources"
   type        = map(string)
