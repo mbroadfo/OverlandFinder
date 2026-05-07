@@ -1,3 +1,7 @@
+[tool.pytest.ini_options]
+pythonpath = ["."]
+asyncio_mode = "strict"
+
 [tool.pyright]
 include = ["*.py"]
 exclude = ["**/__pycache__", "**/.venv", "**/node_modules", "**/.*"]
