@@ -9,28 +9,23 @@ on:
   workflow_dispatch:        # Manual trigger from GitHub UI
 
 # -----------------------------------------------------------------------
-# Required GitHub Secrets (Settings → Secrets → Actions):
+# Prerequisites — run bootstrap.sh ONCE before the first pipeline run:
+#   infrastructure/terraform/bootstrap.sh
 #
-#   AZURE_CLIENT_ID        — App Registration / Federated Identity client ID
-#   AZURE_TENANT_ID        — Azure AD tenant ID
-#   AZURE_SUBSCRIPTION_ID  — Azure subscription ID
+# GitHub Environment "dev" — Variables (Settings → Environments → dev):
+#   AZURE_CLIENT_ID                    — SP App Registration client ID
+#   AZURE_TENANT_ID                    — Azure AD tenant ID
+#   AZURE_SUBSCRIPTION_ID              — Azure subscription ID
+#   TF_VAR_GITHUB_ACTIONS_PRINCIPAL_ID — SP object ID (for KV access policy)
+#   SMS_RECIPIENT                      — Verizon email-to-SMS address
+#   KEY_VAULT_NAME                     — kv-overland-finder-dev
+#   FUNCTION_APP_NAME                  — func-overland-finder-dev
 #
-# One-time OIDC setup (run once from your machine):
-#   az ad app create --display-name "OverlandFinder-GH-Deploy"
-#   az ad sp create --id <app-id>
-#   az role assignment create --role Contributor \
-#     --assignee <sp-object-id> \
-#     --scope /subscriptions/<subscription-id>/resourceGroups/rg-overland-finder-dev
-#   az ad app federated-credential create --id <app-id> --parameters '{
-#     "name": "github-main",
-#     "issuer": "https://token.actions.githubusercontent.com",
-#     "subject": "repo:mbroadfo/OverlandFinder:ref:refs/heads/main",
-#     "audiences": ["api://AzureADTokenExchange"]
-#   }'
+# GitHub Environment "dev" — Secrets (write-only):
+#   MONGODB_URI, SMTP_USERNAME, SMTP_PASSWORD, ANTHROPIC_API_KEY
 # -----------------------------------------------------------------------
 
 env:
-  AZURE_FUNCTIONAPP_NAME: func-overland-finder-dev
   PYTHON_VERSION: "3.11"
 
 permissions:
@@ -65,12 +60,11 @@ jobs:
         continue-on-error: true   # Warn, don't block deploy
 
       - name: Run tests
-        run: |
-          pytest tests/ -v --tb=short -q
+        run: pytest tests/ -v --tb=short -q
         continue-on-error: true   # Tests will grow — don't block deploy while suite is thin
         env:
-          # Minimal env so imports don't fail during test collection
           MONGODB_URI: "mongodb://localhost:27017/test"
+          ANTHROPIC_API_KEY: "test-key-not-used-in-unit-tests"
 
   # -----------------------------------------------------------------------
   # Deploy to Azure Functions
@@ -79,6 +73,7 @@ jobs:
     name: Deploy to Azure
     runs-on: ubuntu-latest
     needs: test
+    environment: dev   # OIDC subject: repo:mbroadfo/OverlandFinder:environment:dev
 
     steps:
       - name: Checkout
@@ -90,31 +85,73 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
 
-      # Oryx builds during deployment, but pre-installing locally gives a
-      # faster deployment and catches missing package errors in CI.
       - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Login to Azure (OIDC)
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      # ── Terraform ────────────────────────────────────────────────────
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: infrastructure/terraform
+        env:
+          ARM_CLIENT_ID:       ${{ vars.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_USE_OIDC:        "true"
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: infrastructure/terraform
+        env:
+          ARM_CLIENT_ID:       ${{ vars.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_USE_OIDC:        "true"
+          TF_VAR_project_name:                  "overland-finder"
+          TF_VAR_environment:                   "dev"
+          TF_VAR_location:                      "eastus"
+          TF_VAR_sms_recipient:                 ${{ vars.SMS_RECIPIENT }}
+          TF_VAR_github_actions_principal_id:   ${{ vars.TF_VAR_GITHUB_ACTIONS_PRINCIPAL_ID }}
+        run: terraform apply -auto-approve
+
+      # ── Push secrets to Key Vault ─────────────────────────────────────
+      - name: Push secrets to Key Vault
+        env:
+          MONGODB_URI:       ${{ secrets.MONGODB_URI }}
+          SMTP_USERNAME:     ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD:     ${{ secrets.SMTP_PASSWORD }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          kv="${{ vars.KEY_VAULT_NAME }}"
+          az keyvault secret set --vault-name "$kv" --name mongodb-uri       --value "$MONGODB_URI"
+          az keyvault secret set --vault-name "$kv" --name smtp-username     --value "$SMTP_USERNAME"
+          az keyvault secret set --vault-name "$kv" --name smtp-password     --value "$SMTP_PASSWORD"
+          az keyvault secret set --vault-name "$kv" --name anthropic-api-key --value "$ANTHROPIC_API_KEY"
+
+      # ── Deploy Python package ─────────────────────────────────────────
       - name: Deploy to Azure Functions
         uses: azure/functions-action@v1
         with:
-          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          app-name: ${{ vars.FUNCTION_APP_NAME }}
           package: .
-          scm-do-build-during-deployment: true   # Let Oryx handle pip install in Azure
+          scm-do-build-during-deployment: true   # Oryx handles pip install in Azure
           enable-oryx-build: true
 
       - name: Verify deployment
         run: |
-          echo "Checking function app status..."
           az functionapp show \
-            --name ${{ env.AZURE_FUNCTIONAPP_NAME }} \
+            --name "${{ vars.FUNCTION_APP_NAME }}" \
             --resource-group rg-overland-finder-dev \
             --query "{state:state, defaultHostName:defaultHostName}" \
             --output table

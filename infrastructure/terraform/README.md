@@ -1,196 +1,145 @@
-# OverlandFinder Infrastructure - Terraform
+# Deal Finder — Terraform Infrastructure
 
-This directory contains Terraform configuration to provision all Azure resources for the OverlandFinder project.
+Provisions all Azure resources for the Deal Finder Function App.
+Deployment is split between Terraform (infrastructure) and GitHub Actions (code + secrets).
 
-## 🏗️ Resources Created
+## Resources created
 
-- **Resource Group** - Container for all Azure resources
-- **Key Vault** - Stores secrets (MongoDB URI, Foundry API keys) - manually populated
-- **Storage Account** - Blob storage for vehicle images and logs
-- **Function App** - Hosts all 4 Azure Functions (Consumption plan - FREE tier):
-  - `CraigslistScraper` - Timer trigger (every 4 hours)
-  - `FacebookScraper` - Timer trigger (every 4 hours + 15 min offset)
-  - `DealEvaluator` - Timer trigger (every 15 minutes)
-  - `DailySMSDigest` - Timer trigger (daily @ 8 AM)
-- **Application Insights** - Telemetry and monitoring
-- **Log Analytics Workspace** - Centralized logging
-- **Managed Identity** - Passwordless authentication for Function App
+| Resource | Name | Purpose |
+|---|---|---|
+| Resource Group | `rg-overland-finder-dev` | Container for all app resources |
+| Storage Account | `stoverlandfinderdev` | Function App host storage (managed identity, no access key) |
+| Service Plan | `asp-overland-finder-dev` | Consumption (Y1) — free tier |
+| Function App | `func-overland-finder-dev` | Hosts scraper, evaluator, SMS timer functions |
+| Key Vault | `kv-overland-finder-dev` | Runtime secrets (resolved via KV references, never in app settings) |
+| Managed Identity | `id-overland-finder-func-dev` | Runtime identity for Function App → KV + Storage |
+| Log Analytics | `log-overland-finder-dev` | Centralized log sink |
+| Application Insights | `appi-overland-finder-dev` | Telemetry, function traces |
 
-## 📋 Prerequisites
+Terraform state is stored separately in `rg-tf-state` / `stoverlandtfstate` — outside this resource group so it survives a `terraform destroy`.
 
-1. **Azure CLI** - Install from https://docs.microsoft.com/en-us/cli/azure/install-azure-cli
-2. **Terraform** - Install from https://www.terraform.io/downloads
-3. **Azure Subscription** - Free tier works to start
-4. **MongoDB Atlas Account** - Free M0 cluster
+## Identity model
 
-## 🚀 Getting Started
+```
+GitHub Actions (external)
+└── Service Principal  sp-deal-finder-github
+      ├── OIDC federated credential — no client secret, short-lived tokens only
+      ├── Role: Contributor on subscription
+      ├── Role: User Access Administrator (conditioned to 3 storage roles only)
+      ├── Role: Storage Blob Data Contributor on state storage account
+      └── Key Vault access policy: Get/List/Set/Delete
 
-### 1. Login to Azure
-
-```bash
-az login
-az account set --subscription "<your-subscription-id>"
+Function App (runtime, internal to Azure)
+└── Managed Identity  id-overland-finder-func-dev
+      ├── Role: Storage Blob Data Owner on function storage
+      ├── Role: Storage Queue Data Contributor on function storage
+      ├── Role: Storage Table Data Contributor on function storage
+      └── Key Vault access policy: Get/List (read-only)
 ```
 
-### 2. Configure Variables
-
-```bash
-# Copy example file
-cp terraform.tfvars.example terraform.tfvars
-
-# Edit with your values
-code terraform.tfvars
-```
-
-Required variables:
-- `foundry_endpoint` - Azure Foundry/OpenAI endpoint
-- `foundry_model_deployment` - Model name (e.g., gpt-4o)
-
-Note: MongoDB URI is NOT in terraform.tfvars - you'll add it manually to Key Vault after deployment (Step 7)
-
-### 3. Initialize Terraform
+## First-time setup (run once, locally)
 
 ```bash
 cd infrastructure/terraform
-terraform init
+chmod +x bootstrap.sh
+./bootstrap.sh
 ```
 
-### 4. Review Plan
+This script:
+1. Creates `rg-tf-state` and the Terraform state storage account
+2. Creates the `sp-deal-finder-github` App Registration and Service Principal
+3. Adds the OIDC federated credential scoped to your GitHub `dev` environment
+4. Assigns minimum RBAC roles with conditions
+5. Prints all values needed for GitHub Environment configuration
 
-```bash
-terraform plan
+After running the script:
+
+1. Add the printed values to your GitHub Environment (`Settings → Environments → dev`)
+2. Add `github_actions_principal_id` to `terraform.tfvars`
+3. Migrate local state to remote:
+   ```bash
+   terraform init -migrate-state
+   ```
+4. Push to `main` — GitHub Actions handles all future deploys
+
+## GitHub Environment configuration
+
+### Variables (viewable in GitHub UI)
+
+| Variable | Value |
+|---|---|
+| `AZURE_CLIENT_ID` | App Registration client ID (from bootstrap output) |
+| `AZURE_TENANT_ID` | Azure AD tenant ID (from bootstrap output) |
+| `AZURE_SUBSCRIPTION_ID` | Azure subscription ID (from bootstrap output) |
+| `TF_VAR_github_actions_principal_id` | Service principal object ID (from bootstrap output) |
+| `PROJECT_NAME` | `overland-finder` |
+| `ENVIRONMENT` | `dev` |
+| `LOCATION` | `eastus` |
+| `SMS_RECIPIENT` | `<your-number>@vtext.com` |
+| `KEY_VAULT_NAME` | `kv-overland-finder-dev` |
+| `FUNCTION_APP_NAME` | `func-overland-finder-dev` |
+
+### Secrets (write-only, pushed to Key Vault by CI/CD)
+
+| Secret | Description |
+|---|---|
+| `MONGODB_URI` | MongoDB Atlas connection string |
+| `SMTP_USERNAME` | Gmail address for email-to-SMS |
+| `SMTP_PASSWORD` | Gmail app password |
+| `ANTHROPIC_API_KEY` | Anthropic API key for Claude evaluator |
+
+## Day-to-day workflow
+
+```
+git push → GitHub Actions
+              ├── terraform init        (reads state from blob via OIDC)
+              ├── terraform apply       (infra changes only if .tf files changed)
+              ├── az keyvault secret set (pushes GitHub Secrets → Key Vault)
+              └── func deploy           (packages Python, deploys to Function App)
 ```
 
-This shows what resources will be created. Review carefully!
-
-### 5. Apply Configuration
+## Common commands
 
 ```bash
-terraform apply
-```
-
-Type `yes` to confirm. This will:
-- Create all Azure resources (~5-10 minutes)
-- Create Key Vault (ready for secrets)
-- Output important values (container registry URL, resource group name, etc.)
-
-### 6. Save Outputs
-
-```bash
-# Save outputs for GitHub Actions
-terraform output -json > ../../terraform-outputs.json
-
-# Get specific values
-terraform output resource_group_name
-terraform output container_registry_login_server
-terraform output -raw container_registry_admin_password
-```
-
-### 7. Add MongoDB Secret to Key Vault
-
-After Terraform deployment completes, manually add your MongoDB connection string:
-
-```bash
-# Get the Key Vault name from Terraform output
-VAULT_NAME=$(terraform output -raw key_vault_name)
-
-# Add MongoDB URI (replace with your actual connection string)
-az keyvault secret set \
-  --vault-name $VAULT_NAME \
-  --name "mongodb-uri" \
-  --value "mongodb+srv://mbroadfo_db_user:<db_password>@overland-finder-cluster.tfehxpn.mongodb.net/?appName=overland-finder-cluster"
-```
-
-This keeps your MongoDB credentials out of Terraform state files and version control.
-
-## 🔧 Common Commands
-
-```bash
-# Show current state
-terraform show
-
-# List all resources
-terraform state list
-
-# Get specific output
-terraform output key_vault_uri
-
-# Format code
-terraform fmt
-
 # Validate configuration
 terraform validate
 
-# Plan changes
-terraform plan -out=tfplan
+# Preview changes
+terraform plan
 
-# Apply saved plan
-terraform apply tfplan
+# Apply manually (when running locally)
+terraform apply
 
-# Destroy all resources (WARNING: Deletes everything!)
+# Show current state
+terraform show
+
+# List resources in state
+terraform state list
+
+# Destroy all app resources (state storage in rg-tf-state is NOT affected)
 terraform destroy
 ```
 
-## 🔄 Updating Infrastructure
+## Troubleshooting
 
-After modifying `.tf` files:
+**`storage account name already taken`**
+Storage account names are globally unique. Edit `STATE_STORAGE_ACCOUNT` in `bootstrap.sh` and `storage_account_name` in `providers.tf` to add a short suffix (e.g. `stoverlandtfstate2`).
 
+**`Key Vault name already exists`**
+Key Vault names are globally unique and soft-deleted vaults hold the name for 7 days. Either wait 7 days or change `project_name` or `environment` in `terraform.tfvars`.
+
+**`insufficient privileges to complete the operation`**
+The service principal needs `Contributor` + conditioned `User Access Administrator`. Check assignments:
 ```bash
-terraform plan    # Review changes
-terraform apply   # Apply changes
+az role assignment list --assignee <SP_OBJECT_ID> --output table
 ```
 
-Terraform tracks state and only applies incremental changes.
+**`AuthorizationFailed` on state storage**
+The service principal needs `Storage Blob Data Contributor` on `stoverlandtfstate`. The bootstrap script assigns this — re-run if it was skipped.
 
-## 📊 Cost Estimates
-
-Run `terraform plan` and check the Azure Pricing Calculator for accurate estimates.
-
-**Expected monthly costs:**
-- Key Vault: FREE (under 10k ops/month)
-- Storage Account: ~$0.10 (minimal usage for vehicle images & function storage)
-- Function App: FREE (Consumption plan, under 1M executions/month)
-- Application Insights: FREE (first 5GB/month)
-- Log Analytics: FREE (first 5GB/month)
-
-**Total: ~$0.10/month (essentially FREE!)**
-
-**Comparison to Container Apps:**
-- Container Registry (Basic): ~~$5~~ **REMOVED**
-- Container Apps Job: ~~$2-3~~ **REMOVED**
-- **Savings: ~$7/month = $84/year**
-
-## 🔐 Security Best Practices
-
-1. **Never commit `terraform.tfvars`** - Contains secrets (already in .gitignore)
-2. **Use Managed Identity** - No passwords in code (configured automatically)
-3. **Enable Key Vault access logs** - Audit who accessed secrets
-4. **Use Azure Policy** - Enforce security standards (optional for personal projects)
-5. **Remote state** - Store tfstate in Azure Storage for team collaboration (commented out in providers.tf)
-
-## 🐛 Troubleshooting
-
-**Error: "The subscription is not registered to use namespace 'Microsoft.App'"**
+**Provider namespace not registered**
 ```bash
-az provider register --namespace Microsoft.App
+az provider register --namespace Microsoft.Web
 az provider register --namespace Microsoft.OperationalInsights
+az provider register --namespace Microsoft.Insights
 ```
-
-**Error: "Key Vault name already exists"**
-- Key Vault names are globally unique
-- Change `project_name` or `environment` in `terraform.tfvars`
-- Or wait 7 days for soft-deleted vault to purge
-
-**Error: "Insufficient permissions"**
-```bash
-# Check your Azure role
-az role assignment list --assignee <your-email> --output table
-
-# You need "Owner" or "Contributor" + "User Access Administrator"
-```
-
-## 📚 Learn More
-
-- [Terraform Azure Provider Docs](https://registry.terraform.io/providers/hashicorp/azurerm/latest/docs)
-- [Azure Container Apps Documentation](https://learn.microsoft.com/en-us/azure/container-apps/)
-- [Azure Key Vault Best Practices](https://learn.microsoft.com/en-us/azure/key-vault/general/best-practices)

@@ -1,25 +1,20 @@
-# Azure Provider Configuration
 terraform {
   required_version = ">= 1.5.0"
-  
+
   required_providers {
     azurerm = {
       source  = "hashicorp/azurerm"
       version = "~> 3.100"
     }
-    azuread = {
-      source  = "hashicorp/azuread"
-      version = "~> 2.47"
-    }
   }
-  
-  # Uncomment for remote state (recommended for team collaboration)
-  # backend "azurerm" {
-  #   resource_group_name  = "rg-terraform-state"
-  #   storage_account_name = "stterraformstate"
-  #   container_name       = "tfstate"
-  #   key                  = "overland-finder.tfstate"
-  # }
+
+  backend "azurerm" {
+    resource_group_name  = "rg-tf-state"
+    storage_account_name = "stoverlandtfstate"
+    container_name       = "tfstate"
+    key                  = "deal-finder/dev.tfstate"
+    use_azuread_auth     = true
+  }
 }
 
 provider "azurerm" {
@@ -33,5 +28,3 @@ provider "azurerm" {
     }
   }
 }
-
-provider "azuread" {}
