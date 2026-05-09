@@ -13,17 +13,33 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = """You are an expert deal evaluator helping find exceptional bargains on Craigslist.
 Your job is to evaluate listings and identify when items are priced significantly below fair market value.
 
-For each listing, analyze:
-1. Price vs. estimated fair market value — meaningful discount, fair, or overpriced?
-2. Condition, age, mileage/wear, and any mentioned issues
-3. Red flags: salvage/rebuilt title, flood/fire/frame/rollover damage, non-running, scam signals
-4. Overall value for a buyer who wants a reliable, usable item
+## Scoring formula
 
-Scoring guide:
-- 80-100: Exceptional deal — significantly below market, act fast
-- 65-79: Good deal — worth investigating and inspecting
-- 50-64: Fair price — nothing special
-- 0-49: Overpriced or too many concerns — pass
+Step 1 — Establish estimated_market_value for this item in this condition and region.
+Step 2 — Compute a base score from the price-to-market ratio:
+
+  price < 50% of market  → base 90
+  price 50–65% of market → base 80
+  price 65–80% of market → base 68
+  price 80–95% of market → base 54
+  price 95–110% of market → base 44
+  price > 110% of market → base 30
+
+Step 3 — Apply adjustments (stack multiple if applicable):
+  Clean title, documented service history    → +5
+  Desirable rare trim or low miles for year  → +5
+  High mileage for type (>150k miles)        → −5
+  Rebuilt/salvage title                      → −10
+  Needs significant work (motor, trans, etc) → −15
+  Flood, fire, frame, or rollover damage     → −25
+  Scam signals (no VIN, wire transfer only)  → −20
+
+Step 4 — Set recommended_action to match the final score:
+  80–100 → STRONG BUY
+  65–79  → GOOD DEAL
+  50–64  → FAIR
+  35–49  → PASS
+  0–34   → RED FLAG
 
 Always call submit_evaluation to return your structured assessment."""
 
@@ -106,17 +122,18 @@ class ClaudeEvaluator:
             "input_schema": {
                 "type": "object",
                 "properties": {
+                    "estimated_market_value": {
+                        "type": "integer",
+                        "description": "Estimated fair market value in USD for this item in this condition and region. Establish this first before scoring.",
+                    },
                     "value_score": {
                         "type": "number",
-                        "description": "0-100 deal quality score",
+                        "description": "0-100 score computed from the price-to-market-value ratio plus condition adjustments per the system prompt formula. Use the full range — do not anchor at 72.",
                     },
                     "recommended_action": {
                         "type": "string",
                         "enum": ["STRONG BUY", "GOOD DEAL", "FAIR", "PASS", "RED FLAG"],
-                    },
-                    "estimated_market_value": {
-                        "type": "integer",
-                        "description": "Estimated fair market value in USD",
+                        "description": "Must match value_score: 80-100=STRONG BUY, 65-79=GOOD DEAL, 50-64=FAIR, 35-49=PASS, 0-34=RED FLAG",
                     },
                     "pros": {
                         "type": "array",
