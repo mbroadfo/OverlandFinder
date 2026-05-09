@@ -1,7 +1,7 @@
 variable "project_name" {
   description = "Project name used in resource naming"
   type        = string
-  default     = "deal-finder"
+  default     = "overland-finder"
 }
 
 variable "environment" {
@@ -18,16 +18,6 @@ variable "location" {
   description = "Azure region for all resources"
   type        = string
   default     = "eastus"
-}
-
-variable "sms_recipient" {
-  description = "SMS recipient via Verizon email-to-SMS gateway (e.g. 3035551234@vtext.com)"
-  type        = string
-}
-
-variable "github_actions_principal_id" {
-  description = "Object ID of the GitHub Actions service principal — granted Key Vault write access so CI/CD can push secrets"
-  type        = string
 }
 
 variable "mongodb_uri" {
@@ -58,7 +48,7 @@ variable "tags" {
   description = "Common tags applied to all resources"
   type        = map(string)
   default = {
-    Project   = "DealFinder"
+    Project   = "OverlandFinder"
     ManagedBy = "Terraform"
     Repo      = "github.com/mbroadfo/OverlandFinder"
   }

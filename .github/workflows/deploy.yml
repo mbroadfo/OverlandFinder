@@ -1,4 +1,4 @@
-name: Deploy Azure Functions
+name: Deploy Infrastructure
 
 # -----------------------------------------------------------------------
 # Triggers
@@ -6,20 +6,17 @@ name: Deploy Azure Functions
 on:
   push:
     branches: [main]
-  workflow_dispatch:        # Manual trigger from GitHub UI
+  workflow_dispatch:
 
 # -----------------------------------------------------------------------
 # Prerequisites — run bootstrap.sh ONCE before the first pipeline run:
 #   infrastructure/terraform/bootstrap.sh
 #
 # GitHub Environment "dev" — Variables (Settings → Environments → dev):
-#   AZURE_CLIENT_ID                    — SP App Registration client ID
-#   AZURE_TENANT_ID                    — Azure AD tenant ID
-#   AZURE_SUBSCRIPTION_ID              — Azure subscription ID
-#   TF_VAR_GITHUB_ACTIONS_PRINCIPAL_ID — SP object ID (for KV access policy)
-#   SMS_RECIPIENT                      — Verizon email-to-SMS address
-#   KEY_VAULT_NAME                     — kv-overland-finder-dev
-#   FUNCTION_APP_NAME                  — func-overland-finder-dev
+#   AZURE_CLIENT_ID       — SP App Registration client ID
+#   AZURE_TENANT_ID       — Azure AD tenant ID
+#   AZURE_SUBSCRIPTION_ID — Azure subscription ID
+#   SMS_RECIPIENT         — Verizon email-to-SMS address
 #
 # GitHub Environment "dev" — Secrets (write-only):
 #   MONGODB_URI, SMTP_USERNAME, SMTP_PASSWORD, ANTHROPIC_API_KEY
@@ -57,36 +54,27 @@ jobs:
         run: |
           pip install ruff
           ruff check . --output-format=github
-        continue-on-error: true   # Warn, don't block deploy
+        continue-on-error: true
 
       - name: Run tests
         run: pytest tests/ -v --tb=short -q
-        continue-on-error: true   # Tests will grow — don't block deploy while suite is thin
+        continue-on-error: true
         env:
           MONGODB_URI: "mongodb://localhost:27017/test"
           ANTHROPIC_API_KEY: "test-key-not-used-in-unit-tests"
 
   # -----------------------------------------------------------------------
-  # Deploy to Azure Functions
+  # Terraform — provision Key Vault and push secrets
   # -----------------------------------------------------------------------
   deploy:
-    name: Deploy to Azure
+    name: Deploy Infrastructure
     runs-on: ubuntu-latest
     needs: test
-    environment: dev   # OIDC subject: repo:mbroadfo/OverlandFinder:environment:dev
+    environment: dev
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-          cache: pip
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
 
       - name: Login to Azure (OIDC)
         uses: azure/login@v2
@@ -95,7 +83,6 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      # ── Terraform ────────────────────────────────────────────────────
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
@@ -118,30 +105,11 @@ jobs:
           ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
           ARM_USE_OIDC:        "true"
-          TF_VAR_project_name:                  "overland-finder"
-          TF_VAR_environment:                   "dev"
-          TF_VAR_location:                      "eastus"
-          TF_VAR_sms_recipient:                 ${{ vars.SMS_RECIPIENT }}
-          TF_VAR_github_actions_principal_id:   ${{ vars.TF_VAR_GITHUB_ACTIONS_PRINCIPAL_ID }}
-          TF_VAR_mongodb_uri:                   ${{ secrets.MONGODB_URI }}
-          TF_VAR_smtp_username:                 ${{ secrets.SMTP_USERNAME }}
-          TF_VAR_smtp_password:                 ${{ secrets.SMTP_PASSWORD }}
-          TF_VAR_anthropic_api_key:             ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_project_name:      "overland-finder"
+          TF_VAR_environment:       "dev"
+          TF_VAR_location:          "eastus"
+          TF_VAR_mongodb_uri:       ${{ secrets.MONGODB_URI }}
+          TF_VAR_smtp_username:     ${{ secrets.SMTP_USERNAME }}
+          TF_VAR_smtp_password:     ${{ secrets.SMTP_PASSWORD }}
+          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
         run: terraform apply -auto-approve
-
-      # ── Deploy Python package ─────────────────────────────────────────
-      - name: Deploy to Azure Functions
-        uses: azure/functions-action@v1
-        with:
-          app-name: ${{ vars.FUNCTION_APP_NAME }}
-          package: .
-          scm-do-build-during-deployment: true   # Oryx handles pip install in Azure
-          enable-oryx-build: true
-
-      - name: Verify deployment
-        run: |
-          az functionapp show \
-            --name "${{ vars.FUNCTION_APP_NAME }}" \
-            --resource-group rg-overland-finder-dev \
-            --query "{state:state, defaultHostName:defaultHostName}" \
-            --output table
