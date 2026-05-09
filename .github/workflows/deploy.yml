@@ -1,61 +1,32 @@
 name: Deploy Infrastructure
 
-# -----------------------------------------------------------------------
-# Triggers
-# -----------------------------------------------------------------------
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# -----------------------------------------------------------------------
-# Prerequisites — run bootstrap.sh ONCE before the first pipeline run:
-#   infrastructure/terraform/bootstrap.sh
-#
-# GitHub Environment "dev" — Variables (Settings → Environments → dev):
-#   AZURE_CLIENT_ID       — SP App Registration client ID
-#   AZURE_TENANT_ID       — Azure AD tenant ID
-#   AZURE_SUBSCRIPTION_ID — Azure subscription ID
-#   SMS_RECIPIENT         — Verizon email-to-SMS address
-#
-# GitHub Environment "dev" — Secrets (write-only):
-#   MONGODB_URI, SMTP_USERNAME, SMTP_PASSWORD, ANTHROPIC_API_KEY
-# -----------------------------------------------------------------------
-
 env:
   PYTHON_VERSION: "3.11"
 
 permissions:
-  id-token: write   # Required for OIDC
+  id-token: write
   contents: read
 
 jobs:
-  # -----------------------------------------------------------------------
-  # Lint & Test
-  # -----------------------------------------------------------------------
   test:
     name: Lint & Test
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python ${{ env.PYTHON_VERSION }}
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
-
-      - name: Install dependencies
-        run: pip install -r requirements.txt
-
+      - run: pip install -r requirements.txt
       - name: Lint with ruff
-        run: |
-          pip install ruff
-          ruff check . --output-format=github
+        run: pip install ruff && ruff check . --output-format=github
         continue-on-error: true
-
       - name: Run tests
         run: pytest tests/ -v --tb=short -q
         continue-on-error: true
@@ -63,9 +34,6 @@ jobs:
           MONGODB_URI: "mongodb://localhost:27017/test"
           ANTHROPIC_API_KEY: "test-key-not-used-in-unit-tests"
 
-  # -----------------------------------------------------------------------
-  # Terraform — provision Key Vault and push secrets
-  # -----------------------------------------------------------------------
   deploy:
     name: Deploy Infrastructure
     runs-on: ubuntu-latest
@@ -73,8 +41,7 @@ jobs:
     environment: dev
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Login to Azure (OIDC)
         uses: azure/login@v2
@@ -105,11 +72,20 @@ jobs:
           ARM_TENANT_ID:       ${{ vars.AZURE_TENANT_ID }}
           ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
           ARM_USE_OIDC:        "true"
-          TF_VAR_project_name:      "overland-finder"
-          TF_VAR_environment:       "dev"
-          TF_VAR_location:          "eastus"
-          TF_VAR_mongodb_uri:       ${{ secrets.MONGODB_URI }}
-          TF_VAR_smtp_username:     ${{ secrets.SMTP_USERNAME }}
-          TF_VAR_smtp_password:     ${{ secrets.SMTP_PASSWORD }}
-          TF_VAR_anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          TF_VAR_project_name: "overland-finder"
+          TF_VAR_environment:  "dev"
+          TF_VAR_location:     "eastus"
         run: terraform apply -auto-approve
+
+      # Secret values are pushed directly — never stored in Terraform state
+      - name: Push secrets to Key Vault
+        env:
+          MONGODB_URI:       ${{ secrets.MONGODB_URI }}
+          SMTP_USERNAME:     ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD:     ${{ secrets.SMTP_PASSWORD }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          az keyvault secret set --vault-name kv-overland-finder-dev --name mongodb-uri        --value "$MONGODB_URI"       --output none
+          az keyvault secret set --vault-name kv-overland-finder-dev --name smtp-username      --value "$SMTP_USERNAME"     --output none
+          az keyvault secret set --vault-name kv-overland-finder-dev --name smtp-password      --value "$SMTP_PASSWORD"     --output none
+          az keyvault secret set --vault-name kv-overland-finder-dev --name anthropic-api-key  --value "$ANTHROPIC_API_KEY" --output none
