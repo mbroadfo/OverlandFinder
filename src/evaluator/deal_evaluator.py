@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-BATCH_SIZE        = 20    # Listings to evaluate per run (stay under 10 min)
+BATCH_SIZE        = 50    # Listings per batch (loops until all pending are done)
 MIN_SCORE_TO_SAVE = 30    # Skip saving obvious junk deals
 REQUEST_DELAY     = 1.5   # Seconds between detail-page fetches
 
@@ -356,5 +356,11 @@ if __name__ == "__main__":
         stream=sys.stdout,
     )
     evaluator = DealEvaluator()
-    result = evaluator.run()
-    print(f"\nFinished: {result}")
+    totals = {"evaluated": 0, "deals_saved": 0, "errors": 0}
+    while True:
+        result = evaluator.run()
+        for k in totals:
+            totals[k] += result[k]
+        if result["evaluated"] == 0:
+            break
+    print(f"\nFinished: {totals}")
