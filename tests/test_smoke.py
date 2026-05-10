@@ -113,14 +113,11 @@ def test_sms_format_message():
     with patch.object(SMSDigest, "_connect_db", return_value=mock_db):
         digest = SMSDigest()
 
-    fake_deals = [
-        {"year": 2015, "make": "Toyota", "model": "4Runner", "price": 13700,
-         "value_score": 72, "location": "Aurora", "url": "https://cl.org/1"},
-        {"year": 2013, "make": "Toyota", "model": "4Runner", "price": 13000,
-         "value_score": 61, "location": "Denver", "url": "https://cl.org/2"},
-    ]
-    msg = digest._format_message(fake_deals)
+    deal = {"year": 2015, "make": "Toyota", "model": "4Runner", "price": 13700,
+            "value_score": 72, "location": "Aurora", "url": "https://cl.org/1",
+            "source": "craigslist"}
+    msg = digest._format_deal(deal, 1, 3)
 
     assert "OverlandFinder" in msg
     assert "4Runner" in msg
-    assert len(msg) <= 400  # Must fit in a couple of SMS segments
+    assert len(msg) <= 200  # Single deal fits comfortably in one SMS

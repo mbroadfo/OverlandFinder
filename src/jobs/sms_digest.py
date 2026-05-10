@@ -66,7 +66,7 @@ class SMSDigest:
     # ------------------------------------------------------------------
 
     def run(self) -> dict:
-        """Query deals, format message, send SMS."""
+        """Query deals, send one SMS per deal."""
         deals = self._get_top_deals()
 
         if not deals:
@@ -77,19 +77,18 @@ class SMSDigest:
             logger.error("[sms_digest] SMS_RECIPIENT not configured in .env")
             return {"sent": False, "deals": len(deals), "reason": "no_recipient"}
 
-        message = self._format_message(deals)
-        logger.info(f"[sms_digest] Sending {len(deals)} deals to {self.recipient}")
-        logger.info(f"[sms_digest] Message ({len(message)} chars):\n{message}")
+        sent_count = 0
+        for i, deal in enumerate(deals, 1):
+            message = self._format_deal(deal, i, len(deals))
+            logger.info(f"[sms_digest] Sending deal {i}/{len(deals)} ({len(message)} chars):\n{message}")
+            if self._send_sms(message):
+                self._mark_notified([deal])
+                sent_count += 1
+                logger.info(f"[sms_digest] ✅ Deal {i} sent and marked notified")
+            else:
+                logger.error(f"[sms_digest] ❌ Failed to send deal {i}")
 
-        sent = self._send_sms(message)
-
-        if sent:
-            self._mark_notified(deals)
-            logger.info(f"[sms_digest] ✅ SMS sent, {len(deals)} deals marked as notified")
-        else:
-            logger.error("[sms_digest] ❌ SMS send failed")
-
-        return {"sent": sent, "deals": len(deals)}
+        return {"sent": sent_count > 0, "deals": sent_count}
 
     # ------------------------------------------------------------------
     # Deal fetching
@@ -127,37 +126,32 @@ class SMSDigest:
     # Message formatting
     # ------------------------------------------------------------------
 
-    def _format_message(self, deals: list[dict]) -> str:
+    def _format_deal(self, deal: dict, i: int, total: int) -> str:
         """
-        Format deals into a compact SMS-friendly string.
+        Format a single deal as a standalone SMS message.
         Example output:
-          OverlandFinder 3 deals:
-          1. '15 Tacoma $13.7k (61) Aurora
-          2. '13 4Runner $13k (60) Denver
-          3. '18 Wrangler $16.5k (55) Erie
+          OverlandFinder deal 1/3 [CL] 🔥GREAT
+          '15 Tacoma $13.7k (82) Aurora
+          https://denver.craigslist.org/...
         """
-        lines = [f"OverlandFinder — {len(deals)} deal{'s' if len(deals) != 1 else ''} today:"]
+        year    = str(deal.get("year", ""))[-2:]
+        model   = deal.get("model", "?")
+        price   = deal.get("price", 0)
+        score   = int(deal.get("value_score", 0))
+        loc     = deal.get("location", "")[:16]
+        url     = deal.get("url", "")
+        source  = deal.get("source", "craigslist")
+        src_tag = "CL" if source == "craigslist" else "eBay"
+        label   = "🔥GREAT" if score >= GOOD_DEAL_SCORE else "👍FAIR"
 
-        for i, deal in enumerate(deals, 1):
-            year   = str(deal.get("year", ""))[-2:]   # "2015" → "15"
-            model  = deal.get("model", "?")
-            price  = deal.get("price", 0)
-            score  = int(deal.get("value_score", 0))
-            loc    = deal.get("location", "")[:12]    # Truncate long city names
-            url    = deal.get("url", "")
-            source = deal.get("source", "craigslist")
-            src_tag = "CL" if source == "craigslist" else "eBay"
+        price_str = f"${price/1000:.1f}k" if price >= 1000 else f"${price}"
 
-            # Format price: $13700 → "$13.7k", $8800 → "$8.8k"
-            price_str = f"${price/1000:.1f}k" if price >= 1000 else f"${price}"
-
-            # Short label
-            label = "🔥GREAT" if score >= GOOD_DEAL_SCORE else "👍FAIR"
-
-            lines.append(f"{i}. [{src_tag}] '{year} {model} {price_str} ({score}) {loc} {label}")
-            if url:
-                lines.append(url)
-
+        lines = [
+            f"OverlandFinder {i}/{total} [{src_tag}] {label}",
+            f"'{year} {model} {price_str} ({score}) {loc}",
+        ]
+        if url:
+            lines.append(url)
         return "\n".join(lines)
 
     # ------------------------------------------------------------------
@@ -230,10 +224,11 @@ if __name__ == "__main__":
     if dry_run:
         deals = digest._get_top_deals()
         if deals:
-            msg = digest._format_message(deals)
-            print(f"\n📱 DRY RUN — message that would be sent ({len(msg)} chars):\n")
-            print("─" * 50)
-            print(msg)
+            print(f"\n📱 DRY RUN — {len(deals)} message(s) that would be sent:\n")
+            for i, deal in enumerate(deals, 1):
+                msg = digest._format_deal(deal, i, len(deals))
+                print("─" * 50)
+                print(msg)
             print("─" * 50)
             print(f"\n{len(deals)} deal(s) found, NOT sent (dry run).")
         else:
