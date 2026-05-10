@@ -2,7 +2,7 @@ name: Scraper & Evaluator
 
 on:
   schedule:
-    - cron: '30 */4 * * *'  # Every 4 hours at :30 past
+    - cron: '0 6,18 * * *'  # Twice daily: 6 AM and 6 PM UTC (midnight and noon MDT)
   workflow_dispatch:
 
 env:

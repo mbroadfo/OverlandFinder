@@ -104,13 +104,14 @@ class DealEvaluator:
             logger.info("[evaluator] No pending listings — nothing to do")
             return {"evaluated": 0, "deals_saved": 0, "errors": 0}
 
-        logger.info(f"[evaluator] Processing {len(pending)} pending listings")
+        batch_size = len(pending)
+        logger.info(f"[evaluator] Processing {batch_size} pending listings")
 
         evaluated = 0
         deals_saved = 0
         errors = 0
 
-        for raw in pending:
+        for idx, raw in enumerate(pending, start=1):
             listing_id = raw["_id"]
             url = raw.get("url", "")
 
@@ -151,12 +152,13 @@ class DealEvaluator:
                     self._save_deal(raw, enriched, evaluation, wish_list_name)
                     deals_saved += 1
                     logger.info(
-                        f"[evaluator] Deal saved: '{enriched.get('title')}' "
-                        f"${enriched.get('price', 0):,} | score={score:.1f} | {action}"
+                        f"[evaluator] [{idx}/{batch_size}] Deal saved: '{enriched.get('title')}' "
+                        f"${enriched.get('price', 0):,} | score={score:.1f} | {action} | {url}"
                     )
                 else:
-                    logger.debug(
-                        f"[evaluator] Skipped low-score: '{enriched.get('title')}' score={score:.1f}"
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped: '{enriched.get('title')}' "
+                        f"score={score:.1f} | {action} | {url}"
                     )
 
                 self.db.raw_listings.update_one(
