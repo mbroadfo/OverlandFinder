@@ -138,6 +138,20 @@ class DealEvaluator:
                 item = self._wish_list_map.get(wish_list_name, {})
                 evaluation_notes = item.get("evaluation_notes", "")
 
+                # Skip if mileage exceeds item's max (skip only when mileage is known)
+                max_mileage = item.get("max_mileage")
+                mileage = enriched.get("mileage")
+                if max_mileage and mileage and mileage > max_mileage:
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped high mileage: "
+                        f"'{enriched.get('title')}' {mileage:,} mi > {max_mileage:,} limit"
+                    )
+                    self.db.raw_listings.update_one(
+                        {"_id": listing_id},
+                        {"$set": {"status": "skipped", "skip_reason": f"mileage_{mileage}"}}
+                    )
+                    continue
+
                 # Score with Claude
                 evaluation = self.evaluator.evaluate(enriched, wish_list_name, evaluation_notes)
                 evaluated += 1
