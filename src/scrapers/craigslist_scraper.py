@@ -118,6 +118,8 @@ class CraigslistScraper(BaseScraper):
 
                     total_seen += len(listings)
                     for listing in listings:
+                        if not self._is_relevant(listing.get("title", ""), term_cfg):
+                            continue
                         listing["wish_list_name"] = name
                         if self.upsert_listing(listing):
                             new_count += 1
@@ -244,6 +246,12 @@ class CraigslistScraper(BaseScraper):
     # ------------------------------------------------------------------
     # Utility parsers
     # ------------------------------------------------------------------
+
+    @staticmethod
+    def _is_relevant(title: str, term_cfg: dict) -> bool:
+        """Return True if any query keyword appears in the title (case-insensitive)."""
+        title_lower = title.lower()
+        return any(kw in title_lower for kw in term_cfg["query"].lower().split())
 
     @staticmethod
     def _parse_price(text: str) -> Optional[int]:

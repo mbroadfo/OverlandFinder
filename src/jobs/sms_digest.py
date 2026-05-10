@@ -144,6 +144,7 @@ class SMSDigest:
             price = deal.get("price", 0)
             score = int(deal.get("value_score", 0))
             loc   = deal.get("location", "")[:12]    # Truncate long city names
+            url   = deal.get("url", "")
 
             # Format price: $13700 → "$13.7k", $8800 → "$8.8k"
             price_str = f"${price/1000:.1f}k" if price >= 1000 else f"${price}"
@@ -152,9 +153,8 @@ class SMSDigest:
             label = "🔥GREAT" if score >= GOOD_DEAL_SCORE else "👍FAIR"
 
             lines.append(f"{i}. '{year} {model} {price_str} ({score}) {loc} {label}")
-
-        # Add a bare CL search link
-        lines.append("Source: denver.craigslist.org/search/cto")
+            if url:
+                lines.append(url)
 
         return "\n".join(lines)
 
