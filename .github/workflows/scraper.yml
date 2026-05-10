@@ -31,10 +31,17 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Run scraper
+      - name: Run Craigslist scraper
         run: python src/scrapers/craigslist_scraper.py
         env:
           MONGODB_URI: ${{ secrets.MONGODB_URI }}
+
+      - name: Run eBay scraper
+        run: python src/scrapers/ebay_scraper.py
+        env:
+          MONGODB_URI:    ${{ secrets.MONGODB_URI }}
+          EBAY_APP_ID:    ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID:   ${{ secrets.EBAY_CERT_ID }}
 
       - name: Run evaluator
         run: python src/evaluator/deal_evaluator.py
