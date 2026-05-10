@@ -237,6 +237,7 @@ class CraigslistScraper(BaseScraper):
                 "posted_at":    None,  # Not in static HTML; fetchable from detail page
                 "search_query": query,
                 "region":       region,
+                "source":       "craigslist",
             }
 
         except Exception as e:

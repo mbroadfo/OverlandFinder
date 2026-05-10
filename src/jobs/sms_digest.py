@@ -114,7 +114,7 @@ class SMSDigest:
                 {
                     "title": 1, "price": 1, "year": 1, "make": 1, "model": 1,
                     "value_score": 1, "recommended_action": 1, "url": 1,
-                    "location": 1, "mileage": 1,
+                    "location": 1, "mileage": 1, "source": 1,
                 }
             )
             .sort("value_score", -1)
@@ -139,12 +139,14 @@ class SMSDigest:
         lines = [f"OverlandFinder — {len(deals)} deal{'s' if len(deals) != 1 else ''} today:"]
 
         for i, deal in enumerate(deals, 1):
-            year  = str(deal.get("year", ""))[-2:]   # "2015" → "15"
-            model = deal.get("model", "?")
-            price = deal.get("price", 0)
-            score = int(deal.get("value_score", 0))
-            loc   = deal.get("location", "")[:12]    # Truncate long city names
-            url   = deal.get("url", "")
+            year   = str(deal.get("year", ""))[-2:]   # "2015" → "15"
+            model  = deal.get("model", "?")
+            price  = deal.get("price", 0)
+            score  = int(deal.get("value_score", 0))
+            loc    = deal.get("location", "")[:12]    # Truncate long city names
+            url    = deal.get("url", "")
+            source = deal.get("source", "craigslist")
+            src_tag = "CL" if source == "craigslist" else "eBay"
 
             # Format price: $13700 → "$13.7k", $8800 → "$8.8k"
             price_str = f"${price/1000:.1f}k" if price >= 1000 else f"${price}"
@@ -152,7 +154,7 @@ class SMSDigest:
             # Short label
             label = "🔥GREAT" if score >= GOOD_DEAL_SCORE else "👍FAIR"
 
-            lines.append(f"{i}. '{year} {model} {price_str} ({score}) {loc} {label}")
+            lines.append(f"{i}. [{src_tag}] '{year} {model} {price_str} ({score}) {loc} {label}")
             if url:
                 lines.append(url)
 

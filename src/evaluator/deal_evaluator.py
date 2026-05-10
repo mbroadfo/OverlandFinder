@@ -46,6 +46,8 @@ MILEAGE_RE = re.compile(
     re.IGNORECASE,
 )
 
+VIN_RE = re.compile(r"\b([A-HJ-NPR-Z0-9]{17})\b")
+
 
 class DealEvaluator:
     """
@@ -236,11 +238,18 @@ class DealEvaluator:
                 mileage = self._extract_mileage_from_text(enriched["description"])
             enriched["mileage"] = mileage
 
-            # Condition, title status from attribute groups
+            # Condition, title status, VIN from attribute groups
             attrs = self._extract_attr_groups(soup)
             enriched["condition"]    = attrs.get("condition")
             enriched["title_status"] = attrs.get("title status")
             enriched["odometer"]     = attrs.get("odometer")
+
+            # VIN — attrs first, then regex fallback on description
+            vin = attrs.get("vin")
+            if not vin and enriched.get("description"):
+                m = VIN_RE.search(enriched["description"])
+                vin = m.group(1) if m else None
+            enriched["vin"] = vin
 
             # More-accurate price from detail page
             price_el = soup.select_one("span.price") or soup.select_one(".price")
@@ -318,9 +327,11 @@ class DealEvaluator:
                 "year":               enriched.get("year"),
                 "price":              price,
                 "mileage":            enriched.get("mileage"),
+                "vin":                enriched.get("vin"),
                 "location":           enriched.get("location", ""),
                 "description":        (enriched.get("description") or "")[:2000],
                 "title_status":       enriched.get("title_status"),
+                "source":             raw.get("source", "craigslist"),
 
                 "value_score":        evaluation.get("value_score", 0),
                 "recommended_action": evaluation.get("recommended_action", "PASS"),
