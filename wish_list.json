@@ -4,6 +4,7 @@
     "query": "4runner",
     "min_price": 4000,
     "max_price": 48000,
+    "min_year": 1996,
     "max_mileage": 180000,
     "evaluation_notes": "3rd gen (1996-2002), 4th gen (2003-2009), or 5th gen (2010+). Must have 4WD. V8 preferred on 5th gen. Check for frame rust (critical on 3rd gen), head gaskets. Clean or rebuilt title OK. Avoid flood, fire, rollover damage."
   },
@@ -12,6 +13,7 @@
     "query": "tacoma 4x4",
     "min_price": 3000,
     "max_price": 40000,
+    "min_year": 1995,
     "max_mileage": 175000,
     "evaluation_notes": "1st gen (1995-2004) or 2nd gen (2005-2015) preferred. Critical: check for frame rust — major recall issue on 1st/early 2nd gen. Check rear leaf spring rust. Verify no known frame replacement needed. Good overlanding base with huge aftermarket."
   },
@@ -20,6 +22,7 @@
     "query": "fj cruiser",
     "min_price": 8000,
     "max_price": 45000,
+    "min_year": 2007,
     "max_mileage": 175000,
     "evaluation_notes": "2007-2014 only. Check rust on rear quarter panels and undercarriage. Very capable off-road. Values rising — $15k-25k is fair for good condition. Parts getting scarce. Poor outward visibility is a known quirk, not a defect."
   },
@@ -28,6 +31,7 @@
     "query": "land cruiser",
     "min_price": 4000,
     "max_price": 35000,
+    "min_year": 1990,
     "max_mileage": 200000,
     "evaluation_notes": "80 series (1990-1997) or 100 series (1998-2007). Extremely capable and durable. Check frame and body rust on 80 series. 100 series: verify timing belt service history. Parts are expensive — factor into budget. High resale value holds well."
   },
@@ -36,6 +40,7 @@
     "query": "gx470",
     "min_price": 4000,
     "max_price": 28000,
+    "min_year": 2003,
     "max_mileage": 175000,
     "evaluation_notes": "2003-2009 GX470 — same platform as Toyota 4Runner/Prado with luxury interior. Very reliable. Later models have KDSS suspension (excellent off-road but pricey to repair). Check differential fluid leaks, timing belt history, rear diff. Good value vs 4Runner."
   },
@@ -44,6 +49,7 @@
     "query": "gx460",
     "min_price": 10000,
     "max_price": 55000,
+    "min_year": 2010,
     "max_mileage": 150000,
     "evaluation_notes": "2010-2023. Modern, very reliable. Check for accident history. 2014+ has refreshed interior. Values remain high — 2015+ models show best depreciation curve. Excellent long-term reliability record. Regularly scheduled maintenance is key."
   },
@@ -52,6 +58,7 @@
     "query": "wrangler",
     "min_price": 2000,
     "max_price": 35000,
+    "min_year": 1997,
     "max_mileage": 150000,
     "evaluation_notes": "TJ (1997-2006), JK (2007-2018), or JL (2018+). Check tub/floor rust, frame, and rocker panels. Verify no death wobble (steering/suspension symptom). Massive aftermarket support. Modified examples can be great value if quality mods. Avoid flood-damaged."
   },
@@ -60,6 +67,7 @@
     "query": "jeep cherokee xj",
     "min_price": 1000,
     "max_price": 16000,
+    "min_year": 1984,
     "max_mileage": 200000,
     "evaluation_notes": "1984-2001 XJ. Legendary off-road platform. 4.0L inline-6 is bulletproof. Rust on frame, rockers, and floor is the primary killer — pass on anything with significant rust. High mileage OK if maintained. Clean title strongly preferred."
   },
@@ -68,6 +76,7 @@
     "query": "xterra pro-4x",
     "min_price": 2000,
     "max_price": 18000,
+    "min_year": 2005,
     "max_mileage": 150000,
     "evaluation_notes": "2005-2015, prefer Pro-4X trim (4WD, skid plates, locking rear diff). CRITICAL: check for radiator coolant leaking into transmission — the 'death rattle.' Verify transmission fluid color is clean red, not milky. Excellent value if transmission is good."
   },
@@ -76,6 +85,7 @@
     "query": "bronco classic",
     "min_price": 3000,
     "max_price": 30000,
+    "min_year": 1978,
     "max_mileage": 150000,
     "evaluation_notes": "Full-size Bronco (1978-1996 most common). Check rust everywhere: floors, frame, quarters. Verify engine runs well — 351W V8 is preferred. Values rising rapidly. Clean title essential. Good condition examples are appreciating assets."
   },
@@ -84,6 +94,7 @@
     "query": "colorado zr2",
     "min_price": 10000,
     "max_price": 45000,
+    "min_year": 2017,
     "max_mileage": 125000,
     "evaluation_notes": "2017-2023 ZR2. Factory off-road spec with Multimatic DSSV dampers, wide track, skid plates. Very capable but suspension repair is expensive. Check for quality aftermarket modifications. Good value vs Tacoma TRD Pro at similar year/mileage."
   }

@@ -169,6 +169,20 @@ class DealEvaluator:
                     )
                     continue
 
+                # Skip if year is below item's min_year (skip only when year is known)
+                min_year = item.get("min_year")
+                year = enriched.get("year")
+                if min_year and year and year < min_year:
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped old vehicle: "
+                        f"'{enriched.get('title')}' {year} < {min_year} min year"
+                    )
+                    self.db.raw_listings.update_one(
+                        {"_id": listing_id},
+                        {"$set": {"status": "skipped", "skip_reason": f"year_{year}"}}
+                    )
+                    continue
+
                 # Score with Claude
                 evaluation = self.evaluator.evaluate(enriched, wish_list_name, evaluation_notes)
                 evaluated += 1
