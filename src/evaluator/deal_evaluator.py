@@ -15,7 +15,7 @@ from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
-from pymongo import MongoClient
+from pymongo import MongoClient, ASCENDING
 from pymongo.database import Database
 from dotenv import load_dotenv
 import os
@@ -57,6 +57,7 @@ class DealEvaluator:
 
     def __init__(self):
         self.db: Database = self._connect_db()
+        self._ensure_indexes()
         self.evaluator = ClaudeEvaluator()
         self.session = requests.Session()
         self.session.headers.update(HEADERS)
@@ -74,6 +75,20 @@ class DealEvaluator:
         client.admin.command("ping")
         logger.info("[evaluator] Connected to MongoDB Atlas")
         return client["overland_finder"]
+
+    def _ensure_indexes(self) -> None:
+        # Sparse unique index on VIN: enforces uniqueness only when VIN is present,
+        # so multiple null-VIN documents (Craigslist) don't conflict.
+        try:
+            self.db.deals.drop_index("vin_unique")
+        except Exception:
+            pass  # Didn't exist yet — fine
+        self.db.deals.create_index(
+            [("vin", ASCENDING)],
+            unique=True,
+            sparse=True,
+            name="vin_unique",
+        )
 
     def _load_wish_list(self) -> dict:
         """Load wish_list.json and index by item name for fast lookup."""
