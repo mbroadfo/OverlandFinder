@@ -331,39 +331,47 @@ class DealEvaluator:
         make = parts[0] if parts else ""
         model = parts[1] if len(parts) > 1 else wish_list_name
 
+        vin = enriched.get("vin")
+        update: dict = {"$set": {
+            "url":                enriched.get("url", ""),
+            "title":              enriched.get("title", ""),
+            "make":               make,
+            "model":              model,
+            "wish_list_name":     wish_list_name,
+            "year":               enriched.get("year"),
+            "price":              price,
+            "mileage":            enriched.get("mileage"),
+            "location":           enriched.get("location", ""),
+            "description":        (enriched.get("description") or "")[:2000],
+            "title_status":       enriched.get("title_status"),
+            "source":             raw.get("source", "craigslist"),
+
+            "value_score":        evaluation.get("value_score", 0),
+            "recommended_action": evaluation.get("recommended_action", "PASS"),
+            "market_value_est":   market_val,
+            "discount_percent":   discount,
+            "pros":               evaluation.get("pros", []),
+            "cons":               evaluation.get("cons", []),
+            "red_flags":          evaluation.get("red_flags", []),
+            "analysis":           evaluation.get("analysis", ""),
+
+            "region":             raw.get("region"),
+            "search_query":       raw.get("search_query"),
+            "source":             raw.get("source", "craigslist_scraper"),
+            "scraped_at":         raw.get("scraped_at"),
+            "evaluated_at":       datetime.now(timezone.utc),
+            "notified":           False,
+        }}
+        # Only store vin when present — sparse unique index skips absent fields,
+        # but indexes vin:null as a value, so null-VIN docs would conflict.
+        if vin:
+            update["$set"]["vin"] = vin
+        else:
+            update["$unset"] = {"vin": ""}
+
         self.db.deals.update_one(
             {"url": enriched.get("url", "")},
-            {"$set": {
-                "url":                enriched.get("url", ""),
-                "title":              enriched.get("title", ""),
-                "make":               make,
-                "model":              model,
-                "wish_list_name":     wish_list_name,
-                "year":               enriched.get("year"),
-                "price":              price,
-                "mileage":            enriched.get("mileage"),
-                "vin":                enriched.get("vin"),
-                "location":           enriched.get("location", ""),
-                "description":        (enriched.get("description") or "")[:2000],
-                "title_status":       enriched.get("title_status"),
-                "source":             raw.get("source", "craigslist"),
-
-                "value_score":        evaluation.get("value_score", 0),
-                "recommended_action": evaluation.get("recommended_action", "PASS"),
-                "market_value_est":   market_val,
-                "discount_percent":   discount,
-                "pros":               evaluation.get("pros", []),
-                "cons":               evaluation.get("cons", []),
-                "red_flags":          evaluation.get("red_flags", []),
-                "analysis":           evaluation.get("analysis", ""),
-
-                "region":             raw.get("region"),
-                "search_query":       raw.get("search_query"),
-                "source":             raw.get("source", "craigslist_scraper"),
-                "scraped_at":         raw.get("scraped_at"),
-                "evaluated_at":       datetime.now(timezone.utc),
-                "notified":           False,
-            }},
+            update,
             upsert=True,
         )
 
