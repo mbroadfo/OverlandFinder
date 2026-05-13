@@ -29,6 +29,10 @@ REGIONS = [
     "denver",
     "boulder",
     "cosprings",
+    "albuquerque",
+    "santafe",
+    "saltlake",
+    "provo",
 ]
 
 
