@@ -222,13 +222,24 @@ class DealEvaluator:
                     )
                     continue
 
-                # Skip if year is below item's min_year (skip only when year is known)
-                min_year = item.get("min_year")
+                # Skip if year is outside item's [min_year, max_year] window
                 year = enriched.get("year")
+                min_year = item.get("min_year")
+                max_year = item.get("max_year")
                 if min_year and year and year < min_year:
                     logger.info(
                         f"[evaluator] [{idx}/{batch_size}] Skipped old vehicle: "
                         f"'{enriched.get('title')}' {year} < {min_year} min year"
+                    )
+                    self.db.raw_listings.update_one(
+                        {"_id": listing_id},
+                        {"$set": {"status": "skipped", "skip_reason": f"year_{year}"}}
+                    )
+                    continue
+                if max_year and year and year > max_year:
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped new vehicle: "
+                        f"'{enriched.get('title')}' {year} > {max_year} max year"
                     )
                     self.db.raw_listings.update_one(
                         {"_id": listing_id},
