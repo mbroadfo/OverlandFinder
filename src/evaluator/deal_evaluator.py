@@ -30,8 +30,23 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 BATCH_SIZE        = 50    # Listings per batch (loops until all pending are done)
-MIN_SCORE_TO_SAVE = 30    # Skip saving obvious junk deals
+MIN_SCORE_TO_SAVE = 50    # Only save FAIR and above (50+) to keep deals collection clean
 REQUEST_DELAY     = 1.5   # Seconds between detail-page fetches
+
+# Keywords that disqualify a listing before hitting Claude — saves API calls + DB space.
+# Checked against both the raw title (before detail fetch) and the full description (after).
+SKIP_KEYWORDS = [
+    "salvage title", "rebuilt title", "reconstructed title",
+    "flood title", "flood damage", "flood car",
+    "frame damage", "bent frame", "structural damage",
+    "airbag deployed", "airbags deployed", "no airbags",
+    "for parts", "parts only", "parts car",
+    "blown head gasket", "seized engine", "locked engine",
+    "no title",
+]
+
+# Craigslist structured title_status values that disqualify a listing
+SALVAGE_TITLE_STATUSES = {"salvage", "rebuilt", "reconstructed", "parts only", "lemon"}
 
 HEADERS = {
     "User-Agent": (
@@ -147,8 +162,46 @@ class DealEvaluator:
                     )
                     continue
 
+                # Quick keyword check on raw title — avoids fetching detail page for obvious junk
+                raw_title_lower = raw.get("title", "").lower()
+                if any(kw in raw_title_lower for kw in SKIP_KEYWORDS):
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped (title keyword): '{raw.get('title')}'"
+                    )
+                    self.db.raw_listings.update_one(
+                        {"_id": listing_id},
+                        {"$set": {"status": "skipped", "skip_reason": "keyword_title"}}
+                    )
+                    continue
+
                 # Enrich with detail page (best-effort)
                 enriched = self._enrich_from_detail(raw)
+
+                # Structured title_status check (Craigslist attrgroup field)
+                title_status = (enriched.get("title_status") or "").lower()
+                if title_status in SALVAGE_TITLE_STATUSES:
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped (title status '{title_status}'): "
+                        f"'{enriched.get('title')}'"
+                    )
+                    self.db.raw_listings.update_one(
+                        {"_id": listing_id},
+                        {"$set": {"status": "skipped", "skip_reason": f"title_status_{title_status}"}}
+                    )
+                    continue
+
+                # Full description keyword check after detail fetch
+                description_lower = (enriched.get("description") or "").lower()
+                if any(kw in description_lower for kw in SKIP_KEYWORDS):
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped (description keyword): "
+                        f"'{enriched.get('title')}'"
+                    )
+                    self.db.raw_listings.update_one(
+                        {"_id": listing_id},
+                        {"$set": {"status": "skipped", "skip_reason": "keyword_description"}}
+                    )
+                    continue
 
                 # Look up wish_list context
                 wish_list_name = raw.get("wish_list_name") or raw.get("search_query", "")
@@ -180,6 +233,18 @@ class DealEvaluator:
                     self.db.raw_listings.update_one(
                         {"_id": listing_id},
                         {"$set": {"status": "skipped", "skip_reason": f"year_{year}"}}
+                    )
+                    continue
+
+                # Duplicate check — same title + price already in deals (e.g. dealer listing twice on eBay)
+                if self.db.deals.find_one({"title": enriched.get("title"), "price": enriched.get("price")}):
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped (duplicate): '{enriched.get('title')}' "
+                        f"${enriched.get('price', 0):,}"
+                    )
+                    self.db.raw_listings.update_one(
+                        {"_id": listing_id},
+                        {"$set": {"status": "skipped", "skip_reason": "duplicate"}}
                     )
                     continue
 
