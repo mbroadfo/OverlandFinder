@@ -321,6 +321,7 @@ class DealEvaluator:
             f"[evaluator] Done — {evaluated} evaluated, "
             f"{deals_saved} deals saved, {errors} errors"
         )
+        self._log_db_stats()
         return {"evaluated": evaluated, "deals_saved": deals_saved, "errors": errors}
 
     # ------------------------------------------------------------------
@@ -479,6 +480,68 @@ class DealEvaluator:
             update,
             upsert=True,
         )
+
+    def _log_db_stats(self) -> None:
+        """Log a concise snapshot of everything currently in the deals collection."""
+        total = self.db.deals.count_documents({})
+        logger.info(f"[evaluator] ── DB snapshot: {total} total deals ──")
+
+        # Rating distribution
+        rating_counts = {
+            r["_id"]: r["count"]
+            for r in self.db.deals.aggregate([
+                {"$group": {"_id": "$recommended_action", "count": {"$sum": 1}}},
+            ])
+        }
+        rating_line = "  ".join(
+            f"{action}: {rating_counts.get(action, 0)}"
+            for action in ["STRONG BUY", "GOOD DEAL", "FAIR", "PASS", "RED FLAG"]
+        )
+        logger.info(f"[evaluator] Ratings     — {rating_line}")
+
+        # Per wish-list breakdown
+        for row in self.db.deals.aggregate([
+            {"$group": {
+                "_id": "$wish_list_name",
+                "count": {"$sum": 1},
+                "avg_score": {"$avg": "$value_score"},
+            }},
+            {"$sort": {"_id": 1}},
+        ]):
+            logger.info(
+                f"[evaluator]   {row['_id'] or '(unknown)'}: "
+                f"{row['count']} deals | avg score {row['avg_score']:.0f}"
+            )
+
+        # By source
+        src_counts = {
+            r["_id"]: r["count"]
+            for r in self.db.deals.aggregate([
+                {"$group": {"_id": "$source", "count": {"$sum": 1}}},
+                {"$sort": {"count": -1}},
+            ])
+        }
+        src_line = "  ".join(f"{src}: {cnt}" for src, cnt in src_counts.items())
+        logger.info(f"[evaluator] Sources     — {src_line}")
+
+        # Top 5 deals
+        top = list(self.db.deals.find(
+            {},
+            {"title": 1, "year": 1, "price": 1, "mileage": 1,
+             "value_score": 1, "recommended_action": 1, "wish_list_name": 1},
+        ).sort("value_score", -1).limit(5))
+        logger.info("[evaluator] Top 5 deals:")
+        for d in top:
+            score = d.get("value_score", 0)
+            action = d.get("recommended_action", "?")
+            year = d.get("year", "?")
+            price = d.get("price", 0) or 0
+            mileage = d.get("mileage")
+            mi_str = f"{mileage:,} mi" if mileage else "no mileage"
+            title = d.get("title", "?")
+            logger.info(
+                f"[evaluator]   [{score:.0f}] {action} | {year} | ${price:,} | {mi_str} | {title}"
+            )
 
     def _record_price_observation(self, enriched: dict, wish_list_name: str, evaluation: dict) -> None:
         """Record price data point for building market knowledge over time."""
