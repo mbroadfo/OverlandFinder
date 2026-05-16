@@ -54,7 +54,7 @@ def test_claude_evaluator_build_prompt_includes_key_fields():
         "location": "Denver, CO",
         "description": "Clean title, runs great, new tires",
     }
-    prompt = ev._build_prompt(listing, "Toyota 4Runner", "Prefer clean title 4x4")
+    prompt = ev._build_prompt(listing, "Toyota 4Runner", "Prefer clean title 4x4", [])
     assert "Toyota 4Runner" in prompt
     assert "8,500" in prompt
     assert "2010" in prompt

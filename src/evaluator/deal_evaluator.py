@@ -21,6 +21,8 @@ from dotenv import load_dotenv
 import os
 
 from src.evaluator.claude_evaluator import ClaudeEvaluator
+from src.enrichment.ebay_detail import EbayDetailFetcher
+from src.enrichment.nhtsa import get_open_recalls
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -74,6 +76,7 @@ class DealEvaluator:
         self.db: Database = self._connect_db()
         self._ensure_indexes()
         self.evaluator = ClaudeEvaluator()
+        self.ebay_detail = EbayDetailFetcher()
         self.session = requests.Session()
         self.session.headers.update(HEADERS)
         self._wish_list_map = self._load_wish_list()
@@ -177,6 +180,15 @@ class DealEvaluator:
                 # Enrich with detail page (best-effort)
                 enriched = self._enrich_from_detail(raw)
 
+                # For eBay listings, fetch item detail to fill missing mileage/description
+                if raw.get("source") == "ebay" and not enriched.get("mileage"):
+                    detail = self.ebay_detail.fetch(raw.get("ebay_item_id", ""))
+                    for k, v in detail.items():
+                        if not enriched.get(k):
+                            enriched[k] = v
+                    if detail.get("mileage"):
+                        logger.info(f"[evaluator] [{idx}/{batch_size}] eBay detail mileage: {detail['mileage']:,} mi")
+
                 # Structured title_status check (Craigslist attrgroup field)
                 title_status = (enriched.get("title_status") or "").lower()
                 if title_status in SALVAGE_TITLE_STATUSES:
@@ -259,8 +271,11 @@ class DealEvaluator:
                     )
                     continue
 
+                # NHTSA recall check — feed into Claude prompt as red flags
+                recalls = get_open_recalls(wish_list_name, enriched.get("year"))
+
                 # Score with Claude
-                evaluation = self.evaluator.evaluate(enriched, wish_list_name, evaluation_notes)
+                evaluation = self.evaluator.evaluate(enriched, wish_list_name, evaluation_notes, recalls)
                 evaluated += 1
 
                 # Record price observation for market knowledge

@@ -53,7 +53,7 @@ class ClaudeEvaluator:
         api_key = os.getenv("ANTHROPIC_API_KEY")
         self.client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
 
-    def evaluate(self, listing: dict, item_name: str, evaluation_notes: str = "") -> dict:
+    def evaluate(self, listing: dict, item_name: str, evaluation_notes: str = "", recalls: list | None = None) -> dict:
         """
         Evaluate a listing using Claude.
 
@@ -61,12 +61,13 @@ class ClaudeEvaluator:
             listing: Enriched raw listing dict (title, price, year, mileage, description, etc.)
             item_name: What we're looking for (e.g. "Toyota 4Runner")
             evaluation_notes: Buyer criteria and red flags for this item type
+            recalls: Open NHTSA recall campaigns for this vehicle
 
         Returns:
             Dict with: value_score, recommended_action, estimated_market_value,
                        pros, cons, red_flags, analysis
         """
-        prompt = self._build_prompt(listing, item_name, evaluation_notes)
+        prompt = self._build_prompt(listing, item_name, evaluation_notes, recalls or [])
 
         response = self.client.messages.create(
             model=self.MODEL,
@@ -87,8 +88,8 @@ class ClaudeEvaluator:
 
         raise RuntimeError(f"Claude did not call submit_evaluation for '{listing.get('title')}'")
 
-    def _build_prompt(self, listing: dict, item_name: str, evaluation_notes: str) -> str:
-        lines = [f"Evaluate this Craigslist listing for: {item_name}"]
+    def _build_prompt(self, listing: dict, item_name: str, evaluation_notes: str, recalls: list) -> str:
+        lines = [f"Evaluate this listing for: {item_name}"]
 
         if evaluation_notes:
             lines.append(f"Buyer criteria: {evaluation_notes}")
@@ -111,6 +112,11 @@ class ClaudeEvaluator:
         description = (listing.get("description") or "").strip()
         if description:
             lines.append(f"\nDescription:\n{description[:1500]}")
+
+        if recalls:
+            lines.append(f"\nOpen NHTSA Recalls ({len(recalls)}):")
+            for r in recalls:
+                lines.append(f"  - {r['component']}: {r['summary'][:200]}")
 
         return "\n".join(lines)
 
