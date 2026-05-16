@@ -274,8 +274,9 @@ class DealEvaluator:
                     )
                     continue
 
-                # Score with Claude
-                evaluation = self.evaluator.evaluate(enriched, wish_list_name, evaluation_notes)
+                # Score with Claude (inject market context from historical observations if available)
+                market_context = self._get_market_context(wish_list_name, enriched.get("year"))
+                evaluation = self.evaluator.evaluate(enriched, wish_list_name, evaluation_notes, market_context)
                 evaluated += 1
 
                 # Record price observation for market knowledge
@@ -542,6 +543,44 @@ class DealEvaluator:
             logger.info(
                 f"[evaluator]   [{score:.0f}] {action} | {year} | ${price:,} | {mi_str} | {title}"
             )
+
+    def _get_market_context(self, wish_list_name: str, year: Optional[int]) -> Optional[str]:
+        """
+        Build a calibration snippet from historical price_observations.
+        Only returns context when we have enough data points to be meaningful.
+        Passed to Claude as part of the user prompt (not system, which is cached).
+        """
+        query: dict = {"wish_list_name": wish_list_name}
+        if year:
+            query["year"] = {"$gte": year - 2, "$lte": year + 2}
+
+        obs = list(
+            self.db.price_observations.find(
+                query,
+                {"price": 1, "claude_market_est": 1, "year": 1},
+            )
+            .sort("observed_at", -1)
+            .limit(100)
+        )
+
+        if len(obs) < 5:
+            return None
+
+        market_ests = [o["claude_market_est"] for o in obs if o.get("claude_market_est")]
+        prices = [o["price"] for o in obs if o.get("price")]
+        if not market_ests:
+            return None
+
+        avg_market = sum(market_ests) / len(market_ests)
+        avg_price = sum(prices) / len(prices) if prices else 0
+        year_range = f"within 2 years of {year}" if year else "all years"
+
+        return (
+            f"Calibration data from {len(obs)} recent {wish_list_name} observations ({year_range}):\n"
+            f"  Observed avg market value: ${avg_market:,.0f}\n"
+            f"  Observed avg listing price: ${avg_price:,.0f}\n"
+            f"Use these figures to anchor your estimated_market_value."
+        )
 
     def _record_price_observation(self, enriched: dict, wish_list_name: str, evaluation: dict) -> None:
         """Record price data point for building market knowledge over time."""

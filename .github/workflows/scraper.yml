@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Install Playwright browsers
+        run: playwright install chromium --with-deps
+
       - name: Run Craigslist scraper
         run: python src/scrapers/craigslist_scraper.py
         env:
@@ -44,10 +47,23 @@ jobs:
           EBAY_APP_ID:    ${{ secrets.EBAY_APP_ID }}
           EBAY_CERT_ID:   ${{ secrets.EBAY_CERT_ID }}
 
+      - name: Run Facebook Marketplace scraper
+        run: python src/scrapers/facebook_scraper.py
+        env:
+          MONGODB_URI:  ${{ secrets.MONGODB_URI }}
+          FB_COOKIES:   ${{ secrets.FB_COOKIES }}
+
       - name: Run evaluator
         run: python src/evaluator/deal_evaluator.py
         env:
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          MONGODB_URI:       ${{ secrets.MONGODB_URI }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          EBAY_APP_ID: ${{ secrets.EBAY_APP_ID }}
+          EBAY_APP_ID:       ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID:      ${{ secrets.EBAY_CERT_ID }}
+
+      - name: Check for expired deals
+        run: python src/jobs/deal_expiry.py
+        env:
+          MONGODB_URI:  ${{ secrets.MONGODB_URI }}
+          EBAY_APP_ID:  ${{ secrets.EBAY_APP_ID }}
           EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}

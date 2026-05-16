@@ -80,7 +80,13 @@ class ClaudeEvaluator:
         api_key = os.getenv("ANTHROPIC_API_KEY")
         self.client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
 
-    def evaluate(self, listing: dict, item_name: str, evaluation_notes: str = "") -> dict:
+    def evaluate(
+        self,
+        listing: dict,
+        item_name: str,
+        evaluation_notes: str = "",
+        market_context: str | None = None,
+    ) -> dict:
         """
         Evaluate a listing using Claude.
 
@@ -88,13 +94,13 @@ class ClaudeEvaluator:
             listing: Enriched raw listing dict (title, price, year, mileage, description, etc.)
             item_name: What we're looking for (e.g. "Toyota 4Runner")
             evaluation_notes: Buyer criteria and red flags for this item type
-            recalls: Open NHTSA recall campaigns for this vehicle
+            market_context: Optional calibration text from historical price_observations
 
         Returns:
             Dict with: value_score, recommended_action, estimated_market_value,
                        pros, cons, red_flags, analysis
         """
-        prompt = self._build_prompt(listing, item_name, evaluation_notes)
+        prompt = self._build_prompt(listing, item_name, evaluation_notes, market_context)
 
         response = self.client.messages.create(
             model=self.MODEL,
@@ -115,11 +121,20 @@ class ClaudeEvaluator:
 
         raise RuntimeError(f"Claude did not call submit_evaluation for '{listing.get('title')}'")
 
-    def _build_prompt(self, listing: dict, item_name: str, evaluation_notes: str) -> str:
+    def _build_prompt(
+        self,
+        listing: dict,
+        item_name: str,
+        evaluation_notes: str,
+        market_context: str | None = None,
+    ) -> str:
         lines = [f"Evaluate this listing for: {item_name}"]
 
         if evaluation_notes:
             lines.append(f"Buyer criteria: {evaluation_notes}")
+
+        if market_context:
+            lines.append(f"\n{market_context}")
 
         lines.append("")
         lines.append(f"Title: {listing.get('title', 'N/A')}")

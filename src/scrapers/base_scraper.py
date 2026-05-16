@@ -77,19 +77,50 @@ class BaseScraper(ABC):
 
     def upsert_listing(self, listing: dict) -> bool:
         """
-        Insert listing if URL not already in DB. Returns True if new.
+        Insert listing if URL not already in DB. Returns True if new or re-queued.
         Uses $setOnInsert so existing listings are never overwritten.
+
+        Price drop detection: if the same URL was previously evaluated and the new
+        price is ≥5% lower, the listing is reset to "pending" so Claude re-scores it
+        and the deal record gets updated with the new price.
         """
         listing.setdefault("scraped_at", datetime.utcnow())
-        listing.setdefault("status", "pending")   # pending → evaluated → notified
+        listing.setdefault("status", "pending")
         listing.setdefault("source", self.scraper_name)
+
+        new_price = listing.get("price") or 0
+        if new_price:
+            existing = self.db.raw_listings.find_one(
+                {"url": listing["url"], "status": "evaluated"},
+                {"_id": 1, "price": 1},
+            )
+            if existing:
+                old_price = existing.get("price") or 0
+                if old_price > 0 and new_price < old_price * 0.95:
+                    pct = (old_price - new_price) / old_price * 100
+                    self.db.raw_listings.update_one(
+                        {"_id": existing["_id"]},
+                        {"$set": {
+                            "price":                    new_price,
+                            "status":                   "pending",
+                            "price_dropped_from":       old_price,
+                            "price_drop_pct":           round(pct, 1),
+                            "price_drop_detected_at":   datetime.utcnow(),
+                        }},
+                    )
+                    logger.info(
+                        f"[{self.scraper_name}] Price drop {pct:.0f}%: "
+                        f"${old_price:,} → ${new_price:,} — re-queuing for eval"
+                    )
+                    return True  # Counts toward new_count so it appears in logs
+                return False  # Exists, no significant change
 
         result = self.db.raw_listings.update_one(
             {"url": listing["url"]},
             {"$setOnInsert": listing},
-            upsert=True
+            upsert=True,
         )
-        return result.upserted_id is not None  # True = new listing added
+        return result.upserted_id is not None
 
     # ------------------------------------------------------------------
     # Job history
