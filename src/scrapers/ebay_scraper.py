@@ -144,7 +144,7 @@ class EbayScraper(BaseScraper):
             params = {
                 "q":            query,
                 "category_ids": MOTORS_CATEGORY,
-                "filter":       f"price:[{min_price}..{max_price}],buyingOptions:{{FIXED_PRICE}}",
+                "filter":       f"price:[{min_price}..{max_price}],buyingOptions:{{FIXED_PRICE|BEST_OFFER}}",
                 "limit":        PAGE_LIMIT,
                 "offset":       offset,
             }

@@ -102,6 +102,8 @@ class ClaudeEvaluator:
             lines.append(f"Year: {listing['year']}")
         if listing.get("mileage"):
             lines.append(f"Mileage: {listing['mileage']:,} miles")
+        else:
+            lines.append("Mileage: UNKNOWN — odometer not disclosed. Apply a -5 uncertainty penalty and note this in cons.")
         if listing.get("location"):
             lines.append(f"Location: {listing['location']}")
         if listing.get("title_status"):
