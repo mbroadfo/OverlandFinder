@@ -80,7 +80,7 @@ class ClaudeEvaluator:
         api_key = os.getenv("ANTHROPIC_API_KEY")
         self.client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
 
-    def evaluate(self, listing: dict, item_name: str, evaluation_notes: str = "", recalls: list | None = None) -> dict:
+    def evaluate(self, listing: dict, item_name: str, evaluation_notes: str = "") -> dict:
         """
         Evaluate a listing using Claude.
 
@@ -94,7 +94,7 @@ class ClaudeEvaluator:
             Dict with: value_score, recommended_action, estimated_market_value,
                        pros, cons, red_flags, analysis
         """
-        prompt = self._build_prompt(listing, item_name, evaluation_notes, recalls or [])
+        prompt = self._build_prompt(listing, item_name, evaluation_notes)
 
         response = self.client.messages.create(
             model=self.MODEL,
@@ -115,7 +115,7 @@ class ClaudeEvaluator:
 
         raise RuntimeError(f"Claude did not call submit_evaluation for '{listing.get('title')}'")
 
-    def _build_prompt(self, listing: dict, item_name: str, evaluation_notes: str, recalls: list) -> str:
+    def _build_prompt(self, listing: dict, item_name: str, evaluation_notes: str) -> str:
         lines = [f"Evaluate this listing for: {item_name}"]
 
         if evaluation_notes:
@@ -141,11 +141,6 @@ class ClaudeEvaluator:
         description = (listing.get("description") or "").strip()
         if description:
             lines.append(f"\nDescription:\n{description[:1500]}")
-
-        if recalls:
-            lines.append(f"\nOpen NHTSA Recalls ({len(recalls)}):")
-            for r in recalls:
-                lines.append(f"  - {r['component']}: {r['summary'][:200]}")
 
         return "\n".join(lines)
 

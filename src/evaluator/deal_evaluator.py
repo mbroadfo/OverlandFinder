@@ -22,7 +22,6 @@ import os
 
 from src.evaluator.claude_evaluator import ClaudeEvaluator
 from src.enrichment.ebay_detail import EbayDetailFetcher
-from src.enrichment.nhtsa import get_open_recalls
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -275,11 +274,8 @@ class DealEvaluator:
                     )
                     continue
 
-                # NHTSA recall check — feed into Claude prompt as red flags
-                recalls = get_open_recalls(wish_list_name, enriched.get("year"))
-
                 # Score with Claude
-                evaluation = self.evaluator.evaluate(enriched, wish_list_name, evaluation_notes, recalls)
+                evaluation = self.evaluator.evaluate(enriched, wish_list_name, evaluation_notes)
                 evaluated += 1
 
                 # Record price observation for market knowledge
