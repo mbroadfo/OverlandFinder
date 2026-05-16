@@ -2,41 +2,51 @@
   {
     "name": "Jeep Wrangler",
     "query": "wrangler",
-    "min_price": 15000,
-    "max_price": 40000,
-    "min_year": 2018,
+    "min_price": 10000,
+    "max_price": 25000,
+    "min_year": 2012,
     "max_year": 2024,
-    "max_mileage": 120000,
-    "evaluation_notes": "JL generation only (2018+). Buyer wants a fun, reliable occasional overlanding vehicle — not a daily driver, not a project. Clean title essential. Sweet spot: 2018–2022, 30k–90k miles, $20k–$32k. Reward: factory Rubicon trim (locking diffs, sway bar disconnect), documented service history, low miles for year. Penalize: heavily lifted examples (suspension stress, alignment wear), evidence of off-road abuse without maintenance, near-MSRP pricing on recent model years. Flag: death wobble mentions, soft top damage, rust on tub floor or rockers. Sahara trim is the comfort/capability balance. Sport/Sport S is base — price should reflect it."
+    "max_mileage": 130000,
+    "evaluation_notes": "JK (2012–2018) or JL (2018+) generation. Avoid 2007–2011 JK with the 3.8L engine (underpowered, more issues) — 2012+ Pentastar 3.6L is the right engine. Buyer wants a capable, reliable off-road vehicle — not a project, not a daily driver. Clean title essential. JK sweet spot: 2014–2018, 60k–110k miles, $13k–$20k. JL sweet spot: 2018–2021, 50k–100k miles, $18k–$25k. Reward: Rubicon trim (locking diffs, sway bar disconnect), Pentastar 3.6L, documented service history, factory or mild lift only. Penalize: heavily lifted examples (suspension stress, death wobble risk), evidence of off-road abuse without maintenance, automatic with towing damage. Flag: death wobble mentions, rust on tub floor or rockers, soft top damage."
   },
   {
-    "name": "Jeep Renegade Trailhawk",
-    "query": "renegade trailhawk",
-    "min_price": 8000,
-    "max_price": 22000,
-    "min_year": 2017,
+    "name": "Jeep Gladiator",
+    "query": "gladiator",
+    "min_price": 20000,
+    "max_price": 35000,
+    "min_year": 2020,
     "max_year": 2024,
     "max_mileage": 100000,
-    "evaluation_notes": "Trailhawk trim only — must have Active Drive Low 4WD, skid plates, and hill descent. Buyer wants a fun, compact occasional vehicle that's easy to store and maintain. 2.4L naturally aspirated engine strongly preferred over 1.4T turbo (more reliable, fewer issues). 2017+ avoids worst 9-speed transmission bugs. Sweet spot: 2018–2022, under 70k miles, $12k–$18k. Reward: 2.4L engine, clean service history, low miles. Penalize: 1.4T turbo engine (more maintenance risk), high mileage, any transmission hesitation mentions. Flag: 9-speed transmission complaints, CVT mentions, rust on underbody, flood history."
+    "evaluation_notes": "2020+ only (JT generation, the only generation). Shares the JL Wrangler platform and Pentastar 3.6L drivetrain with a mid-size truck bed — excellent capability plus utility. Buyer is not shopping for a daily driver. Rubicon trim strongly preferred (locking front and rear diffs, disconnecting sway bar). Sport S and Overland acceptable at the right price. Sweet spot: 2020–2022, under 70k miles, $22k–$30k. Reward: Rubicon trim, factory tow package, hard top, low miles for year. Penalize: Mojave trim (desert-tuned suspension, not optimal for rock crawling), near-MSRP pricing, heavily modified examples. Flag: frame rust, accident history, death wobble."
   },
   {
     "name": "Toyota 4Runner",
     "query": "4runner",
-    "min_price": 15000,
-    "max_price": 45000,
+    "min_price": 13000,
+    "max_price": 38000,
     "min_year": 2014,
     "max_year": 2024,
     "max_mileage": 150000,
-    "evaluation_notes": "5th gen only (2014+). Buyer wants reliability above all — this is the most bulletproof option on the list. TRD Off Road or TRD Pro trim preferred (KDSS suspension, locking rear diff). SR5 is fine for occasional trail use. Sweet spot: 2015–2020, 50k–120k miles, $22k–$35k. Reward: TRD Off Road/Pro trim, documented Toyota dealer service history, KDSS equipped. Penalize: near-MSRP on recent years (buyer is not shopping new), SR5 without 4WD, high mileage above 130k. Note: timing chain not belt, head gaskets not an issue on 1GR-FE — these run forever with basic maintenance."
+    "evaluation_notes": "5th gen only (2014+). Most reliable SUV on this list — 1GR-FE V6 runs forever with basic maintenance, timing chain not belt. TRD Off Road or TRD Pro trim preferred (KDSS suspension, locking rear diff). SR5 4WD is acceptable. Sweet spot: 2015–2020, 70k–130k miles, $18k–$30k. Reward: TRD Off Road/Pro trim, KDSS equipped, documented Toyota dealer service history. Penalize: 2WD models, near-MSRP on recent years, SR5 without locking rear diff. Flag: no service history, rust in northern-climate vehicles, accident damage."
   },
   {
     "name": "Lexus GX460",
     "query": "gx460",
-    "min_price": 14000,
-    "max_price": 42000,
+    "min_price": 13000,
+    "max_price": 38000,
     "min_year": 2014,
     "max_year": 2024,
     "max_mileage": 130000,
-    "evaluation_notes": "2014+ only (post-interior refresh). Same platform and 4.6L V8 as 4Runner but with luxury interior and KDSS standard — excellent off-road capability with a comfortable cabin. Best value luxury overlander on the market. Sweet spot: 2015–2019, 50k–110k miles, $20k–$32k. Reward: low miles for year, full service history, KDSS equipped (all 2014+), Premium trim or above. Penalize: accident history (check Carfax), near-MSRP on recent years, deferred maintenance signs. Note: timing chain not belt, extremely reliable drivetrain. 2017+ shows best depreciation curve."
+    "evaluation_notes": "2014+ only (post-interior refresh). Same platform and 4.6L V8 as the 4Runner but with a luxury interior and KDSS standard on all trims — outstanding off-road capability with a comfortable cabin. Best value luxury overlander available. Sweet spot: 2015–2019, 60k–110k miles, $18k–$30k. Reward: full service history, low miles for year, KDSS (standard 2014+), Premium trim or above. Penalize: accident history, deferred maintenance signs, near-MSRP on recent years. Note: 2017+ shows the best depreciation curve for buyers."
+  },
+  {
+    "name": "Toyota FJ Cruiser",
+    "query": "fj cruiser",
+    "min_price": 11000,
+    "max_price": 22000,
+    "min_year": 2007,
+    "max_year": 2014,
+    "max_mileage": 150000,
+    "evaluation_notes": "All years 2007–2014 (discontinued after 2014). Same proven 4.0L 1GR-FE V6 and 4WD system as the 4Runner — extremely reliable, cult following keeps values stable. TRD package preferred (locking rear diff, skid plates). Poor rear visibility is a known design quirk, not a defect. Sweet spot: 2010–2014, 80k–140k miles, $13k–$20k. Reward: TRD package with locking rear diff, documented service history, low miles for year, rust-free southern or western state vehicle. Penalize: rust on frame or wheel wells (these rust badly in northern/salt climates — check undercarriage carefully), heavily lifted examples, unknown modification history. Flag: frame rust, transmission slipping, no service records. Hold to a high value standard — only surface as a deal if price is genuinely below market."
   }
 ]
