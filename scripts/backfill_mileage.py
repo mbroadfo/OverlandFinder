@@ -1,34 +1,37 @@
 """
 Backfill mileage on eBay deals where odometer was never recorded.
+Also removes deals (and marks raw_listings skipped) when the eBay
+listing is no longer available — no point holding stale data.
 
-Strategy (in order):
-  1. Regex the existing title/description for a mileage figure
-  2. Call EbayDetailFetcher using the item ID extracted from the deal URL
+Strategy per deal:
+  1. Regex on stored title/description (no API cost)
+  2. EbayDetailFetcher API call using item ID from URL
+     - Got mileage → update deal
+     - Listing gone → delete deal + mark raw_listing skipped
 
 Usage:
-    python scripts/backfill_mileage.py           # dry run — shows counts
-    python scripts/backfill_mileage.py --apply   # writes mileage to deals
+    python -u scripts/backfill_mileage.py           # dry run
+    python -u scripts/backfill_mileage.py --apply   # apply changes
 """
 import os
 import re
 import sys
 import time
+from pathlib import Path
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
 load_dotenv()
-
-sys.path.insert(0, str(__import__("pathlib").Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from src.enrichment.ebay_detail import EbayDetailFetcher
 
-MILEAGE_RE = re.compile(
+MILEAGE_RE   = re.compile(
     r"(?:odometer|mileage|miles?)[:\s]*([0-9]{1,3}(?:,?[0-9]{3})*)\s*(?:mi(?:les?)?)?",
     re.IGNORECASE,
 )
 INLINE_MI_RE = re.compile(r"\b([0-9]{1,3}(?:,?[0-9]{3})+)\s*(?:mi|miles)\b", re.IGNORECASE)
 EBAY_ITEM_RE = re.compile(r"/itm/(\d+)")
-
-REQUEST_DELAY = 1.0
+REQUEST_DELAY = 0.5
 
 
 def extract_mileage_from_text(text: str) -> int | None:
@@ -50,66 +53,73 @@ def item_id_from_url(url: str) -> str | None:
 
 def run(apply: bool) -> None:
     tag = "APPLY" if apply else "DRY RUN"
-    print(f"\n{'='*60}")
-    print(f"  backfill_mileage.py — {tag}")
-    print(f"{'='*60}\n")
+    print(f"\n{'='*60}", flush=True)
+    print(f"  backfill_mileage.py — {tag}", flush=True)
+    print(f"{'='*60}\n", flush=True)
 
-    db = MongoClient(os.getenv("MONGODB_URI"))["overland_finder"]
+    db      = MongoClient(os.getenv("MONGODB_URI"))["overland_finder"]
     fetcher = EbayDetailFetcher()
 
     missing = list(db.deals.find(
         {"source": "ebay", "mileage": None},
-        {"_id": 1, "title": 1, "url": 1, "description": 1}
+        {"_id": 1, "title": 1, "url": 1, "description": 1},
     ))
-    print(f"eBay deals missing mileage: {len(missing)}\n")
+    total = len(missing)
+    print(f"eBay deals missing mileage: {total}\n", flush=True)
 
-    text_hits = 0
-    api_hits  = 0
-    api_miss  = 0
-    expired   = 0
+    text_hits = api_hits = expired = no_id = 0
 
-    for deal in missing:
+    for i, deal in enumerate(missing, 1):
         _id   = deal["_id"]
         title = deal.get("title", "")
         desc  = deal.get("description", "")
         url   = deal.get("url", "")
 
-        # Step 1 — regex on stored text
+        # Step 1 — regex on stored text (free)
         mileage = extract_mileage_from_text(f"{title} {desc}")
-        source  = "text"
-
-        # Step 2 — eBay detail API
-        if mileage is None:
-            item_id = item_id_from_url(url)
-            if item_id:
-                detail = fetcher.fetch(item_id)
-                mileage = detail.get("mileage")
-                if mileage:
-                    source = "api"
-                    api_hits += 1
-                else:
-                    expired += 1
-                    api_miss += 1
-                time.sleep(REQUEST_DELAY)
-            else:
-                api_miss += 1
-        else:
-            text_hits += 1
-
         if mileage:
-            print(f"  [{source}] {title[:60]}  →  {mileage:,} mi")
+            text_hits += 1
+            print(f"  [{i}/{total}] text  {title[:55]}  →  {mileage:,} mi", flush=True)
             if apply:
                 db.deals.update_one({"_id": _id}, {"$set": {"mileage": mileage}})
+            continue
 
-    print(f"\nResults:")
-    print(f"  Found via text regex : {text_hits}")
-    print(f"  Found via eBay API   : {api_hits}")
-    print(f"  Not found (expired)  : {expired}")
-    print(f"  Total fillable       : {text_hits + api_hits}")
+        # Step 2 — eBay detail API
+        item_id = item_id_from_url(url)
+        if not item_id:
+            no_id += 1
+            continue
 
-    if not apply:
-        print("\nRe-run with --apply to write changes.")
-    print()
+        detail  = fetcher.fetch(item_id)
+        mileage = detail.get("mileage")
+        time.sleep(REQUEST_DELAY)
+
+        if mileage:
+            api_hits += 1
+            print(f"  [{i}/{total}] api   {title[:55]}  →  {mileage:,} mi", flush=True)
+            if apply:
+                db.deals.update_one({"_id": _id}, {"$set": {"mileage": mileage}})
+        else:
+            # Listing is gone — clean it out of both collections
+            expired += 1
+            print(f"  [{i}/{total}] gone  {title[:55]}", flush=True)
+            if apply:
+                db.deals.delete_one({"_id": _id})
+                db.raw_listings.update_many(
+                    {"url": url},
+                    {"$set": {"status": "skipped", "skip_reason": "listing_removed"}},
+                )
+
+    print(f"\n{'='*60}", flush=True)
+    print(f"Results ({tag}):", flush=True)
+    print(f"  Mileage found (text) : {text_hits}", flush=True)
+    print(f"  Mileage found (API)  : {api_hits}", flush=True)
+    print(f"  Listing gone/expired : {expired}  {'← deleted' if apply else '← would delete'}", flush=True)
+    print(f"  No item ID in URL    : {no_id}", flush=True)
+    print(f"  Total deals updated  : {text_hits + api_hits}", flush=True)
+    if apply:
+        print(f"  Total deals deleted  : {expired}", flush=True)
+    print(flush=True)
 
 
 if __name__ == "__main__":
