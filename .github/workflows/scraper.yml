@@ -79,3 +79,9 @@ jobs:
           MONGODB_URI:  ${{ secrets.MONGODB_URI }}
           EBAY_APP_ID:  ${{ secrets.EBAY_APP_ID }}
           EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+
+      - name: DB Report
+        if: always()
+        run: python scripts/db_report.py
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
