@@ -41,7 +41,7 @@ private sellers list at or slightly below these comps — that is the market, no
 
   Clean title, documented service history    → +5
   Desirable rare trim or low miles for year  → +5
-  Mileage unknown / not disclosed            → −5
+  Mileage unknown / not disclosed            → −10
   High mileage for type (>150k miles)        → −5
   Rebuilt/salvage title                      → −10
   Needs significant work (motor, trans, etc) → −15
@@ -145,7 +145,7 @@ class ClaudeEvaluator:
         if listing.get("mileage"):
             lines.append(f"Mileage: {listing['mileage']:,} miles")
         else:
-            lines.append("Mileage: UNKNOWN — odometer not disclosed. Apply a -5 uncertainty penalty and note this in cons.")
+            lines.append("Mileage: UNKNOWN — odometer not disclosed. Apply a -10 uncertainty penalty and note this in cons. A vehicle with unknown mileage could have 200k+ miles.")
         if listing.get("location"):
             lines.append(f"Location: {listing['location']}")
         if listing.get("title_status"):

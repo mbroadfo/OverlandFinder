@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 BATCH_SIZE        = 50    # Listings per batch (loops until all pending are done)
-MIN_SCORE_TO_SAVE = 50    # Only save FAIR and above (50+) to keep deals collection clean
+MIN_SCORE_TO_SAVE = 55    # Only save mid-FAIR and above (55+) to keep deals collection clean
 REQUEST_DELAY     = 1.5   # Seconds between detail-page fetches
 
 # Keywords that disqualify a listing before hitting Claude — saves API calls + DB space.
