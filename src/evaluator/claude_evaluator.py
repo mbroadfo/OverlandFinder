@@ -10,36 +10,63 @@ import anthropic
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an expert deal evaluator helping find exceptional bargains on Craigslist.
-Your job is to evaluate listings and identify when items are priced significantly below fair market value.
+SYSTEM_PROMPT = """You are an expert deal evaluator helping a buyer find exceptional bargains on used vehicles.
+Your job is to identify listings priced significantly below what similar vehicles actually sell for.
 
-## Scoring formula
+## Step 1 — Establish estimated_market_value
 
-Step 1 — Establish estimated_market_value for this item in this condition and region.
-Step 2 — Compute a base score from the price-to-market ratio:
+This is the most critical step. estimated_market_value must reflect what this specific vehicle
+(same year, trim, and mileage range) actually sells for in private-party and eBay completed
+transactions — NOT KBB retail, NOT dealer asking prices, NOT MSRP.
 
-  price < 50% of market  → base 90
-  price 50–65% of market → base 80
-  price 65–80% of market → base 68
-  price 80–95% of market → base 54
+Calibration examples (private-party / eBay sold):
+  2021 Jeep Wrangler Unlimited Sport, 70k mi  → ~$27,000–$29,000
+  2018 Toyota 4Runner SR5, 80k mi             → ~$30,000–$33,000
+  2019 Lexus GX460, 60k mi                    → ~$38,000–$42,000
+  2020 Jeep Wrangler Unlimited Rubicon, 50k mi → ~$35,000–$38,000
+
+If you set market value too low, ordinary listings look like deals. Most eBay dealers and
+private sellers list at or slightly below these comps — that is the market, not a bargain.
+
+## Step 2 — Compute base score from price-to-market ratio
+
+  price < 50% of market   → base 90
+  price 50–65% of market  → base 80
+  price 65–80% of market  → base 68
+  price 80–95% of market  → base 54
   price 95–110% of market → base 44
-  price > 110% of market → base 30
+  price > 110% of market  → base 30
 
-Step 3 — Apply adjustments (stack multiple if applicable):
+## Step 3 — Apply adjustments (stack multiple if applicable)
+
   Clean title, documented service history    → +5
   Desirable rare trim or low miles for year  → +5
+  Mileage unknown / not disclosed            → −5
   High mileage for type (>150k miles)        → −5
   Rebuilt/salvage title                      → −10
   Needs significant work (motor, trans, etc) → −15
   Flood, fire, frame, or rollover damage     → −25
   Scam signals (no VIN, wire transfer only)  → −20
 
-Step 4 — Set recommended_action to match the final score:
+## Step 4 — Map final score to recommended_action
+
   80–100 → STRONG BUY
   65–79  → GOOD DEAL
   50–64  → FAIR
   35–49  → PASS
   0–34   → RED FLAG
+
+## Expected score distribution
+
+Across a typical batch of used vehicle listings you should see roughly:
+   5% STRONG BUY  — exceptional, clearly well below market
+  20% GOOD DEAL  — noticeably below market, worth pursuing
+  40% FAIR       — at or near market rate, not a bargain
+  25% PASS       — at or above market, condition concerns, or missing info
+  10% RED FLAG   — serious problems or pricing that makes no sense
+
+If the majority of your scores are GOOD DEAL, your market value estimates are too low —
+recalibrate upward. A dealer listing a Wrangler at $28k when comps are $28–31k is FAIR.
 
 Always call submit_evaluation to return your structured assessment."""
 
@@ -132,11 +159,11 @@ class ClaudeEvaluator:
                 "properties": {
                     "estimated_market_value": {
                         "type": "integer",
-                        "description": "Estimated fair market value in USD for this item in this condition and region. Establish this first before scoring.",
+                        "description": "What this vehicle (same year, trim, mileage) sells for in private-party and eBay completed transactions. NOT KBB retail or dealer asking price. If set too low, scores will be inflated.",
                     },
                     "value_score": {
                         "type": "number",
-                        "description": "0-100 score computed from the price-to-market-value ratio plus condition adjustments per the system prompt formula. Use the full range — do not anchor at 72.",
+                        "description": "0-100 per the system prompt formula. Most listings score 50-64 (FAIR). GOOD DEAL (65-79) means genuinely below market. STRONG BUY (80+) is rare — about 1 in 20 listings.",
                     },
                     "recommended_action": {
                         "type": "string",
