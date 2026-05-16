@@ -177,6 +177,37 @@ class DealEvaluator:
                     )
                     continue
 
+                # Look up wish_list context (needed for year/mileage filters below)
+                wish_list_name = raw.get("wish_list_name") or raw.get("search_query", "")
+                item = self._wish_list_map.get(wish_list_name, {})
+                evaluation_notes = item.get("evaluation_notes", "")
+
+                # Year filter on raw data — year is set by both scrapers so no detail fetch needed.
+                # Do this before any network calls to avoid wasting time on obvious rejects.
+                year = raw.get("year")
+                min_year = item.get("min_year")
+                max_year = item.get("max_year")
+                if min_year and year and year < min_year:
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped old vehicle: "
+                        f"'{raw.get('title')}' {year} < {min_year} min year"
+                    )
+                    self.db.raw_listings.update_one(
+                        {"_id": listing_id},
+                        {"$set": {"status": "skipped", "skip_reason": f"year_{year}"}}
+                    )
+                    continue
+                if max_year and year and year > max_year:
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped new vehicle: "
+                        f"'{raw.get('title')}' {year} > {max_year} max year"
+                    )
+                    self.db.raw_listings.update_one(
+                        {"_id": listing_id},
+                        {"$set": {"status": "skipped", "skip_reason": f"year_{year}"}}
+                    )
+                    continue
+
                 # Enrich with detail page (best-effort)
                 enriched = self._enrich_from_detail(raw)
 
@@ -215,11 +246,6 @@ class DealEvaluator:
                     )
                     continue
 
-                # Look up wish_list context
-                wish_list_name = raw.get("wish_list_name") or raw.get("search_query", "")
-                item = self._wish_list_map.get(wish_list_name, {})
-                evaluation_notes = item.get("evaluation_notes", "")
-
                 # Skip if mileage exceeds item's max (skip only when mileage is known)
                 max_mileage = item.get("max_mileage")
                 mileage = enriched.get("mileage")
@@ -234,30 +260,8 @@ class DealEvaluator:
                     )
                     continue
 
-                # Skip if year is outside item's [min_year, max_year] window
-                year = enriched.get("year")
-                min_year = item.get("min_year")
-                max_year = item.get("max_year")
-                if min_year and year and year < min_year:
-                    logger.info(
-                        f"[evaluator] [{idx}/{batch_size}] Skipped old vehicle: "
-                        f"'{enriched.get('title')}' {year} < {min_year} min year"
-                    )
-                    self.db.raw_listings.update_one(
-                        {"_id": listing_id},
-                        {"$set": {"status": "skipped", "skip_reason": f"year_{year}"}}
-                    )
-                    continue
-                if max_year and year and year > max_year:
-                    logger.info(
-                        f"[evaluator] [{idx}/{batch_size}] Skipped new vehicle: "
-                        f"'{enriched.get('title')}' {year} > {max_year} max year"
-                    )
-                    self.db.raw_listings.update_one(
-                        {"_id": listing_id},
-                        {"$set": {"status": "skipped", "skip_reason": f"year_{year}"}}
-                    )
-                    continue
+                # Use enriched year (detail page may have refined it for CL listings)
+                year = enriched.get("year", year)
 
                 # Duplicate check — same title + price already in deals (e.g. dealer listing twice on eBay)
                 if self.db.deals.find_one({"title": enriched.get("title"), "price": enriched.get("price")}):
