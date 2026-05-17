@@ -128,6 +128,7 @@ class DealEvaluator:
         Process up to BATCH_SIZE pending listings.
         Returns counts for logging/job history.
         """
+        total_pending = self.db.raw_listings.count_documents({"status": "pending"})
         pending = list(
             self.db.raw_listings
             .find({"status": "pending"})
@@ -139,7 +140,7 @@ class DealEvaluator:
             return {"evaluated": 0, "deals_saved": 0, "errors": 0}
 
         batch_size = len(pending)
-        logger.info(f"[evaluator] Processing {batch_size} pending listings")
+        logger.info(f"[evaluator] Processing {batch_size} listings ({total_pending} pending total)")
 
         evaluated = 0
         deals_saved = 0
@@ -318,11 +319,13 @@ class DealEvaluator:
 
             time.sleep(REQUEST_DELAY)
 
+        remaining = self.db.raw_listings.count_documents({"status": "pending"})
         logger.info(
-            f"[evaluator] Done — {evaluated} evaluated, "
-            f"{deals_saved} deals saved, {errors} errors"
+            f"[evaluator] Done — {evaluated} evaluated, {deals_saved} deals saved, "
+            f"{errors} errors | {remaining} pending remaining"
         )
-        self._log_db_stats()
+        if remaining == 0:
+            self._log_db_stats()
         return {"evaluated": evaluated, "deals_saved": deals_saved, "errors": errors}
 
     # ------------------------------------------------------------------
