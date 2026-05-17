@@ -263,6 +263,20 @@ class DealEvaluator:
                 # Use enriched year (detail page may have refined it for CL listings)
                 year = enriched.get("year", year)
 
+                # Price ceiling guard — skip before hitting Claude if price exceeds wish list budget
+                listing_price = enriched.get("price", 0) or 0
+                max_price_ceiling = item.get("max_price")
+                if max_price_ceiling and listing_price > max_price_ceiling:
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped over budget: "
+                        f"'{enriched.get('title')}' ${listing_price:,} > ${max_price_ceiling:,} max"
+                    )
+                    self.db.raw_listings.update_one(
+                        {"_id": listing_id},
+                        {"$set": {"status": "skipped", "skip_reason": f"over_budget_{listing_price}"}}
+                    )
+                    continue
+
                 # Duplicate check — same title + price already in deals (e.g. dealer listing twice on eBay)
                 if self.db.deals.find_one({"title": enriched.get("title"), "price": enriched.get("price")}):
                     logger.info(
@@ -466,6 +480,7 @@ class DealEvaluator:
             "red_flags":          evaluation.get("red_flags", []),
             "analysis":           evaluation.get("analysis", ""),
 
+            "ebay_item_id":       raw.get("ebay_item_id"),
             "region":             raw.get("region"),
             "search_query":       raw.get("search_query"),
             "source":             raw.get("source", "craigslist_scraper"),
