@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 TOP_N              = 3    # Deals to include in digest
 MIN_SCORE          = 40   # Only include deals at or above this score
-LOOKBACK_HOURS     = 48   # Consider deals evaluated in the last N hours
+REPEAT_AFTER_DAYS  = 4    # Re-notify about a deal after this many days
 MAX_SMS_CHARS      = 300  # Keep message short; some carriers accept 300+
 GOOD_DEAL_SCORE    = 65   # Above this = "GOOD DEAL", below = "FAIR DEAL"
 
@@ -99,19 +99,21 @@ class SMSDigest:
 
     def _get_top_deals(self) -> list[dict]:
         """
-        Get the top N unnotified deals from the last LOOKBACK_HOURS.
-        Excludes RED FLAG listings and already-notified deals.
+        Get the top N deals eligible for notification.
+        A deal is eligible if it has never been notified, or was last notified
+        more than REPEAT_AFTER_DAYS ago. Excludes RED FLAG listings.
         """
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
+        repeat_cutoff = datetime.now(timezone.utc) - timedelta(days=REPEAT_AFTER_DAYS)
 
         deals = list(
             self.db.deals.find(
                 {
                     "value_score": {"$gte": MIN_SCORE},
-                    "notified":    False,
-                    "evaluated_at": {"$gte": cutoff},
-                    # Exclude definite red flags — those contain "🚫" or "RED FLAG"
-                    "recommended_action": {"$not": {"$regex": "RED FLAG|🚫"}},
+                    "$or": [
+                        {"notified": False},
+                        {"notified_at": {"$lt": repeat_cutoff}},
+                    ],
+                    "recommended_action": {"$not": {"$regex": "RED FLAG"}},
                 },
                 {
                     "title": 1, "price": 1, "year": 1, "make": 1, "model": 1,
@@ -150,7 +152,7 @@ class SMSDigest:
             src_tag = "eBay"
         else:
             src_tag = "CL"
-        label   = "🔥GREAT" if score >= GOOD_DEAL_SCORE else "👍FAIR"
+        label   = "GREAT" if score >= GOOD_DEAL_SCORE else "FAIR"
 
         price_str = f"${price/1000:.1f}k" if price >= 1000 else f"${price}"
 
@@ -209,7 +211,10 @@ class SMSDigest:
         ids = [d["_id"] for d in deals]
         self.db.deals.update_many(
             {"_id": {"$in": ids}},
-            {"$set": {"notified": True, "notified_at": datetime.now(timezone.utc)}}
+            {
+                "$set": {"notified": True, "notified_at": datetime.now(timezone.utc)},
+                "$inc": {"times_notified": 1},
+            },
         )
 
 
@@ -232,12 +237,12 @@ if __name__ == "__main__":
     if dry_run:
         deals = digest._get_top_deals()
         if deals:
-            print(f"\n📱 DRY RUN — {len(deals)} message(s) that would be sent:\n")
+            print(f"\nDRY RUN -- {len(deals)} message(s) that would be sent:\n")
             for i, deal in enumerate(deals, 1):
                 msg = digest._format_deal(deal, i, len(deals))
-                print("─" * 50)
+                print("-" * 50)
                 print(msg)
-            print("─" * 50)
+            print("-" * 50)
             print(f"\n{len(deals)} deal(s) found, NOT sent (dry run).")
         else:
             print("No qualifying deals found.")

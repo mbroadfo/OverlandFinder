@@ -65,6 +65,13 @@ jobs:
           MONGODB_URI:  ${{ secrets.MONGODB_URI }}
           FB_COOKIES:   ${{ secrets.FB_COOKIES }}
 
+      - name: Check for expired deals
+        run: python src/jobs/deal_expiry.py
+        env:
+          MONGODB_URI:  ${{ secrets.MONGODB_URI }}
+          EBAY_APP_ID:  ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
+
       - name: Run evaluator
         run: python src/evaluator/deal_evaluator.py
         env:
@@ -72,13 +79,6 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           EBAY_APP_ID:       ${{ secrets.EBAY_APP_ID }}
           EBAY_CERT_ID:      ${{ secrets.EBAY_CERT_ID }}
-
-      - name: Check for expired deals
-        run: python src/jobs/deal_expiry.py
-        env:
-          MONGODB_URI:  ${{ secrets.MONGODB_URI }}
-          EBAY_APP_ID:  ${{ secrets.EBAY_APP_ID }}
-          EBAY_CERT_ID: ${{ secrets.EBAY_CERT_ID }}
 
       - name: DB Report
         if: always()

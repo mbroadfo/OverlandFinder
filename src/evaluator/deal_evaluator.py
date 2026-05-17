@@ -64,6 +64,14 @@ MILEAGE_RE = re.compile(
 
 VIN_RE = re.compile(r"\b([A-HJ-NPR-Z0-9]{17})\b")
 
+CL_REMOVED_PHRASES = [
+    "this posting has been deleted",
+    "this posting has expired",
+    "this posting has been flagged for removal",
+    "this posting has been removed",
+]
+CL_HOMEPAGE = {"https://www.craigslist.org", "https://craigslist.org"}
+
 
 class DealEvaluator:
     """
@@ -208,8 +216,34 @@ class DealEvaluator:
                     )
                     continue
 
+                # eBay liveness pre-check — skip before detail fetch if listing is gone
+                if raw.get("source") == "ebay":
+                    item_id = raw.get("ebay_item_id", "")
+                    if item_id and not self.ebay_detail.exists(item_id):
+                        logger.info(
+                            f"[evaluator] [{idx}/{batch_size}] Skipped (eBay listing gone): "
+                            f"'{raw.get('title')}'"
+                        )
+                        self.db.raw_listings.update_one(
+                            {"_id": listing_id},
+                            {"$set": {"status": "skipped", "skip_reason": "listing_removed"}}
+                        )
+                        continue
+
                 # Enrich with detail page (best-effort)
                 enriched = self._enrich_from_detail(raw)
+
+                # CL removal check — detected during detail page fetch
+                if enriched.get("_listing_removed"):
+                    logger.info(
+                        f"[evaluator] [{idx}/{batch_size}] Skipped (CL listing removed): "
+                        f"'{raw.get('title')}'"
+                    )
+                    self.db.raw_listings.update_one(
+                        {"_id": listing_id},
+                        {"$set": {"status": "skipped", "skip_reason": "listing_removed"}}
+                    )
+                    continue
 
                 # For eBay listings, fetch item detail to fill missing mileage/description
                 if raw.get("source") == "ebay" and not enriched.get("mileage"):
@@ -361,6 +395,16 @@ class DealEvaluator:
         try:
             resp = self.session.get(url, timeout=12)
             resp.raise_for_status()
+
+            # Detect removed CL listings (redirect to homepage or removal message)
+            if "craigslist.org" in url:
+                if resp.url.rstrip("/") in CL_HOMEPAGE:
+                    enriched["_listing_removed"] = True
+                    return enriched
+                if any(phrase in resp.text.lower() for phrase in CL_REMOVED_PHRASES):
+                    enriched["_listing_removed"] = True
+                    return enriched
+
             soup = BeautifulSoup(resp.text, "html.parser")
 
             # Description
