@@ -276,7 +276,8 @@ class DealEvaluator:
                     continue
 
                 # Score with Claude (inject market context from historical observations if available)
-                market_context = self._get_market_context(wish_list_name, enriched.get("year"))
+                max_price = item.get("max_price")
+                market_context = self._get_market_context(wish_list_name, enriched.get("year"), max_price)
                 evaluation = self.evaluator.evaluate(enriched, wish_list_name, evaluation_notes, market_context)
                 evaluated += 1
 
@@ -547,15 +548,19 @@ class DealEvaluator:
                 f"[evaluator]   [{score:.0f}] {action} | {year} | ${price:,} | {mi_str} | {title}"
             )
 
-    def _get_market_context(self, wish_list_name: str, year: Optional[int]) -> Optional[str]:
+    def _get_market_context(self, wish_list_name: str, year: Optional[int], max_price: Optional[int] = None) -> Optional[str]:
         """
         Build a calibration snippet from historical price_observations.
         Only returns context when we have enough data points to be meaningful.
+        Filters out observations where claude_market_est > max_price * 1.5 to prevent
+        national eBay high-end listings from inflating local market calibration.
         Passed to Claude as part of the user prompt (not system, which is cached).
         """
         query: dict = {"wish_list_name": wish_list_name}
         if year:
             query["year"] = {"$gte": year - 2, "$lte": year + 2}
+        if max_price:
+            query["claude_market_est"] = {"$lte": max_price * 1.5}
 
         obs = list(
             self.db.price_observations.find(
