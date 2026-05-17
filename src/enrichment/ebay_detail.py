@@ -49,6 +49,23 @@ class EbayDetailFetcher:
         self._token_expires = time.time() + data.get("expires_in", 7200)
         return self._token
 
+    def exists(self, ebay_item_id: str) -> bool:
+        """Return True if the eBay listing is still live, False only on explicit 404/410."""
+        if not ebay_item_id:
+            return True  # Can't verify — assume alive
+        try:
+            token = self._get_token()
+            if not token:
+                return True  # Can't verify without credentials — assume alive
+            resp = self.session.get(
+                ITEM_URL.format(item_id=ebay_item_id),
+                headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+                timeout=15,
+            )
+            return resp.status_code not in (404, 410)
+        except Exception:
+            return True  # Network error — assume alive, retry next run
+
     def fetch(self, ebay_item_id: str) -> dict:
         """
         Fetch full item detail for a single eBay listing.

@@ -113,7 +113,9 @@ class DealExpiryChecker:
     # ------------------------------------------------------------------
 
     def _check_listing(self, url: str, source: str, deal: dict) -> bool:
-        if "ebay" in source:
+        if "facebook" in source or "facebook" in url:
+            return True  # Can't verify without Playwright + auth cookies
+        if "ebay" in source or "ebay.com" in url:
             return self._check_ebay(url, deal)
         return self._check_craigslist(url)
 
@@ -141,8 +143,7 @@ class DealExpiryChecker:
         item_id = deal.get("ebay_item_id") or self._extract_ebay_item_id(url)
         if not item_id:
             return True  # Can't verify without item ID
-        detail = self.ebay_detail.fetch(item_id)
-        return bool(detail)  # Empty dict → listing gone
+        return self.ebay_detail.exists(item_id)
 
     # ------------------------------------------------------------------
     # Cleanup
