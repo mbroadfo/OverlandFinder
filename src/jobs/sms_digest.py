@@ -77,6 +77,7 @@ class SMSDigest:
             logger.error("[sms_digest] SMS_RECIPIENT not configured in .env")
             return {"sent": False, "deals": len(deals), "reason": "no_recipient"}
 
+        import time
         sent_count = 0
         for i, deal in enumerate(deals, 1):
             message = self._format_deal(deal, i, len(deals))
@@ -84,9 +85,11 @@ class SMSDigest:
             if self._send_sms(message):
                 self._mark_notified([deal])
                 sent_count += 1
-                logger.info(f"[sms_digest] ✅ Deal {i} sent and marked notified")
+                logger.info(f"[sms_digest] Deal {i} sent and marked notified")
             else:
-                logger.error(f"[sms_digest] ❌ Failed to send deal {i}")
+                logger.error(f"[sms_digest] Failed to send deal {i}")
+            if i < len(deals):
+                time.sleep(8)  # Pause between sends so gateway delivers as separate SMS
 
         return {"sent": sent_count > 0, "deals": sent_count}
 
@@ -134,14 +137,19 @@ class SMSDigest:
           '15 Tacoma $13.7k (82) Aurora
           https://denver.craigslist.org/...
         """
-        year    = str(deal.get("year", ""))[-2:]
+        year    = str(deal["year"])[-2:] if deal.get("year") else "??"
         model   = deal.get("model", "?")
         price   = deal.get("price", 0)
         score   = int(deal.get("value_score", 0))
         loc     = deal.get("location", "")[:16]
         url     = deal.get("url", "")
-        source  = deal.get("source", "craigslist")
-        src_tag = "CL" if source == "craigslist" else "eBay"
+        source  = deal.get("source", "")
+        if "facebook" in source:
+            src_tag = "FB"
+        elif "ebay" in source:
+            src_tag = "eBay"
+        else:
+            src_tag = "CL"
         label   = "🔥GREAT" if score >= GOOD_DEAL_SCORE else "👍FAIR"
 
         price_str = f"${price/1000:.1f}k" if price >= 1000 else f"${price}"
