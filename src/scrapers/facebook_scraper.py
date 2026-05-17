@@ -76,10 +76,24 @@ class FacebookScraper(BaseScraper):
                 "Export your Facebook session cookies as JSON and store them as a secret."
             )
         try:
-            return json.loads(raw)
+            cookies = json.loads(raw)
         except json.JSONDecodeError:
-            # Try base64-encoded JSON
-            return json.loads(base64.b64decode(raw).decode())
+            cookies = json.loads(base64.b64decode(raw).decode())
+
+        # Playwright only accepts sameSite values: "Strict", "Lax", "None".
+        # Browser extensions often export "no_restriction", "unspecified", etc.
+        _same_site_map = {
+            "no_restriction": "None",
+            "unspecified": "Lax",
+            "lax": "Lax",
+            "strict": "Strict",
+            "none": "None",
+        }
+        for c in cookies:
+            raw_ss = str(c.get("sameSite", "")).lower()
+            c["sameSite"] = _same_site_map.get(raw_ss, "Lax")
+
+        return cookies
 
     # ------------------------------------------------------------------
     # Core scrape loop (sync wrapper around async Playwright)
