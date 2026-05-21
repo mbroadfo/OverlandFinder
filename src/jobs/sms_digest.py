@@ -144,7 +144,7 @@ class SMSDigest:
         price   = deal.get("price", 0)
         score   = int(deal.get("value_score", 0))
         loc     = deal.get("location", "")[:16]
-        url     = deal.get("url", "")
+        url     = deal.get("url", "").split("?")[0]  # Strip eBay tracking params
         source  = deal.get("source", "")
         if "facebook" in source:
             src_tag = "FB"

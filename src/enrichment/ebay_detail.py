@@ -50,7 +50,7 @@ class EbayDetailFetcher:
         return self._token
 
     def exists(self, ebay_item_id: str) -> bool:
-        """Return True if the eBay listing is still live, False only on explicit 404/410."""
+        """Return True only if the eBay listing is still active and purchasable."""
         if not ebay_item_id:
             return True  # Can't verify — assume alive
         try:
@@ -62,7 +62,21 @@ class EbayDetailFetcher:
                 headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
                 timeout=15,
             )
-            return resp.status_code not in (404, 410)
+            if resp.status_code in (404, 410):
+                return False
+            if not resp.ok:
+                return True  # Other error — assume alive, retry next run
+            data = resp.json()
+            # Sold/ended Fixed Price listings return 200 but show no buying options
+            # or report SOLD_OUT / UNAVAILABLE availability
+            buying_options = data.get("buyingOptions", [])
+            if buying_options and not any(o in buying_options for o in ("FIXED_PRICE", "BEST_OFFER", "AUCTION")):
+                return False
+            for avail in data.get("estimatedAvailabilities", []):
+                status = avail.get("estimatedAvailabilityStatus", "")
+                if status in ("SOLD_OUT", "UNAVAILABLE"):
+                    return False
+            return True
         except Exception:
             return True  # Network error — assume alive, retry next run
 
