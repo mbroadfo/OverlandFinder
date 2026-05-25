@@ -39,6 +39,7 @@ SITES = [
         "mode": "all_cookies",
         "domain_filter": "facebook.com",
         "wait_for_cookie": "c_user",
+        "verify_url": "https://www.facebook.com/marketplace/vehicles/",
     },
     {
         "name": "RVTrader (DataDome)",
@@ -135,6 +136,7 @@ def harvest() -> None:
                 continue
 
             wait_cookie = site.get("wait_for_cookie", "")
+            verify_url = site.get("verify_url", "")
             if wait_cookie:
                 print(f"  Log in / solve any puzzle in the browser window.")
                 print(f"  Script will auto-continue once '{wait_cookie}' cookie appears.")
@@ -143,7 +145,20 @@ def harvest() -> None:
                     print(f"  FAIL Timed out waiting for '{wait_cookie}' after {MAX_WAIT}s")
                     results.append((site["secret_name"], False))
                     continue
-                print(f"  '{wait_cookie}' detected — capturing cookies.")
+                print(f"  '{wait_cookie}' detected — verifying session is active...")
+                if verify_url:
+                    try:
+                        page.goto(verify_url, wait_until="domcontentloaded", timeout=30_000)
+                        time.sleep(3)
+                        if "login" in page.url.lower() or "checkpoint" in page.url.lower():
+                            print(f"  FAIL Session invalid — redirected to login. Log out of Facebook in Edge and log back in fresh, then re-run.")
+                            results.append((site["secret_name"], False))
+                            continue
+                        print(f"  Session verified active.")
+                    except Exception as e:
+                        print(f"  WARNING Could not verify session: {e} — capturing anyway.")
+                else:
+                    print(f"  '{wait_cookie}' detected — capturing cookies.")
             else:
                 time.sleep(5)
 
