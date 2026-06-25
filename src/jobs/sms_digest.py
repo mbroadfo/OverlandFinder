@@ -2,10 +2,11 @@
 Daily SMS Digest — Sends top overlanding deals via Verizon email-to-SMS gateway.
 
 Flow:
-  1. Query MongoDB for top unnotified deals (last 24h, score >= 40)
-  2. Format compact SMS message
-  3. Send via SMTP → Verizon NUMBER@vtext.com gateway
-  4. Mark deals as notified in MongoDB
+  1. Query MongoDB for top unnotified deals (score >= 40, scraped within MAX_LISTING_AGE_DAYS)
+  2. Verify each candidate listing is still live before sending
+  3. Format compact SMS message
+  4. Send via SMTP → Verizon NUMBER@vtext.com gateway
+  5. Mark deals as notified in MongoDB
 
 Required .env variables:
   SMS_RECIPIENT     — e.g. 7208399656@vtext.com
@@ -17,10 +18,11 @@ Required .env variables:
 import os
 import smtplib
 import logging
+import requests
 from datetime import datetime, timedelta, timezone
 from email.mime.text import MIMEText
-from typing import Optional
 
+from bs4 import BeautifulSoup
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
@@ -31,11 +33,27 @@ logger = logging.getLogger(__name__)
 # Configuration
 # ---------------------------------------------------------------------------
 
-TOP_N              = 3    # Deals to include in digest
-MIN_SCORE          = 40   # Only include deals at or above this score
-REPEAT_AFTER_DAYS  = 4    # Re-notify about a deal after this many days
-MAX_SMS_CHARS      = 300  # Keep message short; some carriers accept 300+
-GOOD_DEAL_SCORE    = 65   # Above this = "GOOD DEAL", below = "FAIR DEAL"
+TOP_N                = 3    # Deals to include in digest
+MIN_SCORE            = 40   # Only include deals at or above this score
+REPEAT_AFTER_DAYS    = 4    # Re-notify about a deal after this many days
+MAX_SMS_CHARS        = 300  # Keep message short; some carriers accept 300+
+GOOD_DEAL_SCORE      = 65   # Above this = "GREAT", below = "FAIR"
+MAX_LISTING_AGE_DAYS = 5    # Skip deals whose listing was scraped more than this many days ago
+FETCH_CANDIDATES     = TOP_N * 3  # Over-fetch so we have fallbacks after liveness filtering
+
+CL_REMOVED_PHRASES = [
+    "this posting has been deleted",
+    "this posting has expired",
+    "this posting has been flagged for removal",
+    "this posting has been removed",
+]
+_HTTP_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    )
+}
 
 
 class SMSDigest:
@@ -66,29 +84,46 @@ class SMSDigest:
     # ------------------------------------------------------------------
 
     def run(self) -> dict:
-        """Query deals, send one SMS per deal."""
-        deals = self._get_top_deals()
+        """Query deals, verify liveness, send one SMS per live deal."""
+        candidates = self._get_top_deals()
 
-        if not deals:
+        if not candidates:
             logger.info("[sms_digest] No qualifying deals to send")
             return {"sent": False, "deals": 0, "reason": "no_deals"}
 
         if not self.recipient:
             logger.error("[sms_digest] SMS_RECIPIENT not configured in .env")
-            return {"sent": False, "deals": len(deals), "reason": "no_recipient"}
+            return {"sent": False, "deals": len(candidates), "reason": "no_recipient"}
+
+        # Filter to live listings before sending
+        live_deals = []
+        for deal in candidates:
+            if len(live_deals) >= TOP_N:
+                break
+            title = deal.get("title", "?")[:60]
+            if self._is_still_live(deal):
+                live_deals.append(deal)
+                logger.info(f"[sms_digest] Live: {title}")
+            else:
+                logger.info(f"[sms_digest] Expired — removing from DB: {title}")
+                self.db.deals.delete_one({"_id": deal["_id"]})
+
+        if not live_deals:
+            logger.info("[sms_digest] All candidates were expired — nothing to send")
+            return {"sent": False, "deals": 0, "reason": "all_expired"}
 
         import time
         sent_count = 0
-        for i, deal in enumerate(deals, 1):
-            message = self._format_deal(deal, i, len(deals))
-            logger.info(f"[sms_digest] Sending deal {i}/{len(deals)} ({len(message)} chars):\n{message}")
+        for i, deal in enumerate(live_deals, 1):
+            message = self._format_deal(deal, i, len(live_deals))
+            logger.info(f"[sms_digest] Sending deal {i}/{len(live_deals)} ({len(message)} chars):\n{message}")
             if self._send_sms(message):
                 self._mark_notified([deal])
                 sent_count += 1
                 logger.info(f"[sms_digest] Deal {i} sent and marked notified")
             else:
                 logger.error(f"[sms_digest] Failed to send deal {i}")
-            if i < len(deals):
+            if i < len(live_deals):
                 time.sleep(8)  # Pause between sends so gateway delivers as separate SMS
 
         return {"sent": sent_count > 0, "deals": sent_count}
@@ -99,16 +134,17 @@ class SMSDigest:
 
     def _get_top_deals(self) -> list[dict]:
         """
-        Get the top N deals eligible for notification.
-        A deal is eligible if it has never been notified, or was last notified
-        more than REPEAT_AFTER_DAYS ago. Excludes RED FLAG listings.
+        Get up to FETCH_CANDIDATES deals eligible for notification, freshest-first.
+        Caller will liveness-filter these down to TOP_N before sending.
         """
-        repeat_cutoff = datetime.now(timezone.utc) - timedelta(days=REPEAT_AFTER_DAYS)
+        repeat_cutoff   = datetime.now(timezone.utc) - timedelta(days=REPEAT_AFTER_DAYS)
+        freshness_cutoff = datetime.now(timezone.utc) - timedelta(days=MAX_LISTING_AGE_DAYS)
 
         deals = list(
             self.db.deals.find(
                 {
                     "value_score": {"$gte": MIN_SCORE},
+                    "scraped_at":  {"$gte": freshness_cutoff},
                     "$or": [
                         {"notified": False},
                         {"notified_at": {"$lt": repeat_cutoff}},
@@ -118,14 +154,44 @@ class SMSDigest:
                 {
                     "title": 1, "price": 1, "year": 1, "make": 1, "model": 1,
                     "value_score": 1, "recommended_action": 1, "url": 1,
-                    "location": 1, "mileage": 1, "source": 1,
+                    "location": 1, "mileage": 1, "source": 1, "scraped_at": 1,
                 }
             )
-            .sort("value_score", -1)
-            .limit(TOP_N)
+            .sort([("value_score", -1), ("scraped_at", -1)])
+            .limit(FETCH_CANDIDATES)
         )
 
         return deals
+
+    def _is_still_live(self, deal: dict) -> bool:
+        """
+        Quick liveness check before sending SMS. Craigslist: HTTP probe.
+        Facebook/eBay: optimistic (can't verify without auth/API in this workflow).
+        """
+        url    = deal.get("url", "")
+        source = (deal.get("source") or "").lower()
+
+        if not url:
+            return False
+        if "facebook" in source:
+            return True
+        if "ebay" in source or "ebay.com" in url:
+            return True  # No eBay API creds in SMS workflow; be optimistic
+
+        # Craigslist
+        try:
+            resp = requests.get(url, timeout=12, allow_redirects=True, headers=_HTTP_HEADERS)
+            if resp.status_code == 404:
+                return False
+            if resp.url.rstrip("/") in ("https://www.craigslist.org", "https://craigslist.org"):
+                return False
+            lower = resp.text.lower()
+            if any(phrase in lower for phrase in CL_REMOVED_PHRASES):
+                return False
+            soup = BeautifulSoup(resp.text, "html.parser")
+            return bool(soup.select_one("#postingbody"))
+        except Exception:
+            return True  # Network error — be optimistic, retry next run
 
     # ------------------------------------------------------------------
     # Message formatting
@@ -235,17 +301,33 @@ if __name__ == "__main__":
     dry_run = "--dry-run" in sys.argv
 
     if dry_run:
-        deals = digest._get_top_deals()
-        if deals:
-            print(f"\nDRY RUN -- {len(deals)} message(s) that would be sent:\n")
-            for i, deal in enumerate(deals, 1):
-                msg = digest._format_deal(deal, i, len(deals))
+        candidates = digest._get_top_deals()
+        if candidates:
+            print(f"\nDRY RUN -- checking {len(candidates)} candidates for liveness...\n")
+            live, dead = [], []
+            for deal in candidates:
+                if digest._is_still_live(deal):
+                    live.append(deal)
+                else:
+                    dead.append(deal)
+            print(f"Live: {len(live)}  |  Expired: {len(dead)}\n")
+            if dead:
+                print("EXPIRED (would be deleted):")
+                for d in dead:
+                    print(f"  - {d.get('title','?')[:70]}")
+                print()
+            to_send = live[:TOP_N]
+            if to_send:
+                print(f"WOULD SEND ({len(to_send)}):")
+                for i, deal in enumerate(to_send, 1):
+                    msg = digest._format_deal(deal, i, len(to_send))
+                    print("-" * 50)
+                    print(msg)
                 print("-" * 50)
-                print(msg)
-            print("-" * 50)
-            print(f"\n{len(deals)} deal(s) found, NOT sent (dry run).")
+            else:
+                print("No live deals found — nothing would be sent.")
         else:
-            print("No qualifying deals found.")
+            print("No qualifying deals found (check age filter or score threshold).")
         sys.exit(0)
 
     result = digest.run()
