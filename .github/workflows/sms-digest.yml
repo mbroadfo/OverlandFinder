@@ -35,7 +35,9 @@ jobs:
       - name: Send SMS digest
         run: python src/jobs/sms_digest.py
         env:
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          SMS_RECIPIENT: ${{ vars.SMS_RECIPIENT }}
+          MONGODB_URI:    ${{ secrets.MONGODB_URI }}
+          SMTP_USERNAME:  ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD:  ${{ secrets.SMTP_PASSWORD }}
+          SMS_RECIPIENT:  ${{ vars.SMS_RECIPIENT }}
+          EBAY_APP_ID:    ${{ secrets.EBAY_APP_ID }}
+          EBAY_CERT_ID:   ${{ secrets.EBAY_CERT_ID }}

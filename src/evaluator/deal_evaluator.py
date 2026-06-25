@@ -245,6 +245,20 @@ class DealEvaluator:
                     )
                     continue
 
+                # Early duplicate check for eBay — title+price are already in enriched from
+                # the raw listing, so we can skip the 12-second API call on known duplicates.
+                if raw.get("source") == "ebay":
+                    if self.db.deals.find_one({"title": enriched.get("title"), "price": enriched.get("price")}):
+                        logger.info(
+                            f"[evaluator] [{idx}/{batch_size}] Skipped (duplicate): '{enriched.get('title')}' "
+                            f"${enriched.get('price', 0):,}"
+                        )
+                        self.db.raw_listings.update_one(
+                            {"_id": listing_id},
+                            {"$set": {"status": "skipped", "skip_reason": "duplicate"}}
+                        )
+                        continue
+
                 # For eBay listings, fetch item detail to fill missing mileage/description
                 if raw.get("source") == "ebay" and not enriched.get("mileage"):
                     detail = self.ebay_detail.fetch(raw.get("ebay_item_id", ""))

@@ -26,6 +26,8 @@ from bs4 import BeautifulSoup
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
+from src.enrichment.ebay_detail import EbayDetailFetcher
+
 load_dotenv()
 logger = logging.getLogger(__name__)
 
@@ -66,6 +68,7 @@ class SMSDigest:
         self.smtp_port    = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_user    = os.getenv("SMTP_USERNAME", "")
         self.smtp_pass    = os.getenv("SMTP_PASSWORD", "")
+        self.ebay_detail  = EbayDetailFetcher()
 
     # ------------------------------------------------------------------
     # DB connection
@@ -154,7 +157,7 @@ class SMSDigest:
                 {
                     "title": 1, "price": 1, "year": 1, "make": 1, "model": 1,
                     "value_score": 1, "recommended_action": 1, "url": 1,
-                    "location": 1, "mileage": 1, "source": 1, "scraped_at": 1,
+                    "location": 1, "mileage": 1, "source": 1, "scraped_at": 1, "ebay_item_id": 1,
                 }
             )
             .sort([("value_score", -1), ("scraped_at", -1)])
@@ -176,7 +179,8 @@ class SMSDigest:
         if "facebook" in source:
             return True
         if "ebay" in source or "ebay.com" in url:
-            return True  # No eBay API creds in SMS workflow; be optimistic
+            item_id = deal.get("ebay_item_id", "")
+            return self.ebay_detail.exists(item_id)  # falls back to True if no creds
 
         # Craigslist
         try:
